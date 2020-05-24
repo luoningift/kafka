@@ -35,4 +35,11 @@ class Producer
     {
         return $this->process->send($data);
     }
+
+    /**
+     * 释放链接
+     */
+    public function close() {
+        $this->process->close();
+    }
 }

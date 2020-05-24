@@ -5,8 +5,10 @@
  * Date: 2019/8/17
  * Time: 下午10:59
  */
+
 namespace HKY\Kafka\Client;
 
+use HKY\Kafka\Client\Client\ClientInterface;
 use HKY\Kafka\Client\Config\Config;
 use HKY\Kafka\Client\Sasl\Plain;
 use HKY\Kafka\Client\Exception;
@@ -127,7 +129,7 @@ class Broker
 
         $newTopics = [];
         foreach ($topics as $topic) {
-            if ((int) $topic['errorCode'] !== Protocol::NO_ERROR) {
+            if ((int)$topic['errorCode'] !== Protocol::NO_ERROR) {
                 throw new Exception\ErrorCodeException();
                 continue;
             }
@@ -168,6 +170,32 @@ class Broker
     public function getDataConnect(string $key): ?Client
     {
         return $this->getConnect($key, 'dataClients');
+    }
+
+
+    public function close()
+    {
+        if (isset($this->metaClients) && is_array($this->metaClients)) {
+            foreach ($this->metaClients as $client) {
+                if ($client instanceof ClientInterface) {
+                    try {
+                        $client->close();
+                    } catch (\Exception $e) {
+                    }
+                }
+            }
+        }
+
+        if (isset($this->dataClients) && is_array($this->dataClients)) {
+            foreach ($this->dataClients as $client) {
+                if ($client instanceof ClientInterface) {
+                    try {
+                        $client->close();
+                    } catch (\Exception $e) {
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -218,7 +246,7 @@ class Broker
 
     /**
      * @param string $host
-     * @param int    $port
+     * @param int $port
      * @return null|\swoole_client
      * @throws Exception\Config
      * @throws Exception\Exception
@@ -238,11 +266,11 @@ class Broker
     {
         $nodeIds = array_keys($this->brokers);
         shuffle($nodeIds);
-        if (! isset($nodeIds[0])) {
+        if (!isset($nodeIds[0])) {
             return null;
         }
 
-        return $this->getMetaConnect((string) $nodeIds[0]);
+        return $this->getMetaConnect((string)$nodeIds[0]);
     }
 
     /**
@@ -268,7 +296,7 @@ class Broker
 
         $securityProtocol = $this->config->getSecurityProtocol();
 
-        $this->config->setSslEnable(! in_array($securityProtocol, $plainConnections, true));
+        $this->config->setSslEnable(!in_array($securityProtocol, $plainConnections, true));
 
         if (in_array($securityProtocol, $saslConnections, true)) {
             return $this->getSaslMechanismProvider($this->config);
@@ -284,9 +312,9 @@ class Broker
      */
     private function getSaslMechanismProvider(Config $config): SaslMechanism
     {
-        $mechanism  = $config->getSaslMechanism();
-        $username   = $config->getSaslUsername();
-        $password   = $config->getSaslPassword();
+        $mechanism = $config->getSaslMechanism();
+        $username = $config->getSaslUsername();
+        $password = $config->getSaslPassword();
 
         switch ($mechanism) {
             case Config::SASL_MECHANISMS_PLAIN:

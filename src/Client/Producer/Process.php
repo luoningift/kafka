@@ -137,4 +137,10 @@ class Process extends BaseProcess
 
         return $sendData;
     }
+
+    public function close() {
+
+        $broker = $this->getBroker();
+        $broker->close();
+    }
 }
