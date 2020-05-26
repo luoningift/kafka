@@ -47,7 +47,7 @@ class ProducerConnection extends BaseConnection implements ConnectionInterface
 
     protected $initLength = 100;
 
-    protected $initMaxLength = 50;
+    protected $maxLength = 50;
 
 
     /**
@@ -82,7 +82,7 @@ class ProducerConnection extends BaseConnection implements ConnectionInterface
      */
     public function lazySend($data) {
 
-        if ($this->channel->length() >= $this->initLength) {
+        if ($this->channel->length() >= $this->maxLength) {
             $this->batchSend();
         }
         foreach($data as $one) {
