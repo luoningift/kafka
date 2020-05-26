@@ -32,7 +32,7 @@ class Client implements ClientInterface
      */
     public function __construct(string $host, int $port, ?Config $config = null, ?SaslMechanism $saslProvider = null)
     {
-        if (class_exists('\Swoole\Coroutine\Client')) {
+        if (class_exists('\Swoole\Coroutine\Client') && \Swoole\Coroutine::getCid() >= 0) {
             $this->client = new CoClient($host, $port, $config, $saslProvider);
         } else {
             $this->client = new NormalClient($host, $port, $config, $saslProvider);

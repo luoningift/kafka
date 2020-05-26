@@ -35,6 +35,9 @@ class Consumer
      */
     public function subscribe(?callable $func = null, $breakTime = 0.01, $maxCurrency = 128)
     {
+        if (!class_exists('\Swoole\Coroutine\Client') || \Swoole\Coroutine::getCid() < 0) {
+            throw new \RuntimeException('only support swoole environment and in coroutine');
+        }
         $this->process->subscribe($func, $breakTime, $maxCurrency);
     }
 

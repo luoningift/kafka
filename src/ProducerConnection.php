@@ -12,6 +12,7 @@ use Hyperf\Pool\Pool;
 use Hyperf\Utils\ApplicationContext;
 use Psr\Container\ContainerInterface;
 use Swoole\Coroutine\Channel as CoChannel;
+use Swoole\Process;
 use Swoole\Timer;
 
 /**
@@ -63,6 +64,7 @@ class ProducerConnection extends BaseConnection implements ConnectionInterface
         $this->config = array_replace($this->config, $config);
         $this->channel = new CoChannel($this->initLength);
         $this->addTimer();
+        $this->registerSignal();
     }
 
     public function __call($name, $arguments)
@@ -80,12 +82,13 @@ class ProducerConnection extends BaseConnection implements ConnectionInterface
      * @param $data
      * @return boolean
      */
-    public function lazySend($data) {
+    public function lazySend($data)
+    {
 
         if ($this->channel->length() >= $this->maxLength) {
             $this->batchSend();
         }
-        foreach($data as $one) {
+        foreach ($data as $one) {
             $this->channel->push($one, 1.5);
         }
         return true;
@@ -94,15 +97,16 @@ class ProducerConnection extends BaseConnection implements ConnectionInterface
     /**
      * 批量发送
      */
-    protected function batchSend() {
+    protected function batchSend()
+    {
 
         $queueCount = $this->channel->length();
-        while($queueCount > 0) {
+        while ($queueCount > 0) {
             $popCount = $queueCount >= 30 ? 30 : $queueCount;
             $queueCount = $queueCount - $popCount;
-            go(function() use ($popCount) {
+            go(function () use ($popCount) {
                 $send = [];
-                for($i = 0; $i < $popCount; $i++) {
+                for ($i = 0; $i < $popCount; $i++) {
                     $popData = $this->channel->pop(0.05);
                     if (is_array($popData) && $popData) {
                         $send[] = $popData;
@@ -119,11 +123,26 @@ class ProducerConnection extends BaseConnection implements ConnectionInterface
     }
 
     /**
+     * 注册信号
+     */
+    protected function registerSignal()
+    {
+
+        Process::signal(SIGINT, function () {
+            $this->batchSend();
+        });
+        Process::signal(SIGTERM, function () {
+            $this->batchSend();
+        });
+    }
+
+    /**
      * 定时300ms批量发送数据
      */
-    protected function addTimer() {
+    protected function addTimer()
+    {
 
-        $this->timer = Timer::tick(300, function() {
+        $this->timer = Timer::tick(300, function () {
             $this->batchSend();
         });
     }
@@ -209,6 +228,7 @@ class ProducerConnection extends BaseConnection implements ConnectionInterface
     {
         try {
             Timer::clear($this->timer);
-        } catch (\Exception $e) {}
+        } catch (\Exception $e) {
+        }
     }
 }
