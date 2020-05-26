@@ -5,6 +5,7 @@
  * Date: 2019/8/18
  * Time: 下午3:53
  */
+
 namespace HKY\Kafka\Client\Producer;
 
 use HKY\Kafka\Client\BaseProcess;
@@ -47,29 +48,29 @@ class Process extends BaseProcess
         $broker = $this->getBroker();
         $config = $this->getConfig();
 
-        $requiredAck    = $config->getRequiredAck();
-        $timeout        = $config->getTimeout();
-        $compression    = $config->getCompression();
+        $requiredAck = $config->getRequiredAck();
+        $timeout = $config->getTimeout();
+        $compression = $config->getCompression();
 
         if (empty($recordSet)) {
             return [];
         }
 
         // 处理数据
-        $sendData   = $this->convertRecordSet($recordSet);
-        $result     = [];
+        $sendData = $this->convertRecordSet($recordSet);
+        $result = [];
         foreach ($sendData as $brokerId => $topicList) {
-            $client = $broker->getDataConnect((string) $brokerId);
-            if ($client === null || ! $client->isConnected()) {
+            $client = $broker->getDataConnect((string)$brokerId);
+            if ($client === null || !$client->isConnected()) {
                 return [];
             }
 
             $params = [
                 'transactional_id' => null,
                 'required_ack' => $requiredAck,
-                'timeout'      => $timeout,
-                'data'         => $topicList,
-                'compression'  => $compression,
+                'timeout' => $timeout,
+                'data' => $topicList,
+                'compression' => $compression,
             ];
 
             try {
@@ -99,47 +100,44 @@ class Process extends BaseProcess
     protected function convertRecordSet(array $recordSet): array
     {
         $sendData = [];
-        $broker   = $this->getBroker();
-        $topics   = $broker->getTopics(); // syncMeta获取 broker和topics数据
+        $broker = $this->getBroker();
+        $topics = $broker->getTopics(); // syncMeta获取 broker和topics数据
 
         foreach ($recordSet as $record) {
             $this->recordValidator->validate($record, $topics);
 
             $topicMeta = $topics[$record['topic']];
-            $partNums  = array_keys($topicMeta);
-            shuffle($partNums);
-
-            $partId = isset($record['partId'], $topicMeta[$record['partId']]) ? $record['partId'] : $partNums[0];
-
-            $brokerId  = $topicMeta[$partId];
+            $partNums = array_keys($topicMeta);
+            $key = $record['key'] ?? '';
+            if ($key) {
+                $partCountNums = count($topicMeta);
+                $partId = intval(sprintf("%u", crc32($key))) % $partCountNums;
+            } elseif(isset($record['partId'], $topicMeta[$record['partId']])) {
+                $partId = $record['partId'];
+            } else {
+                shuffle($partNums);
+                $partId = $partNums[0];
+            }
+            $brokerId = $topicMeta[$partId];
             $topicData = [];
             if (isset($sendData[$brokerId][$record['topic']])) {
                 $topicData = $sendData[$brokerId][$record['topic']];
             }
-
             $partition = [];
             if (isset($topicData['partitions'][$partId])) {
                 $partition = $topicData['partitions'][$partId];
             }
-
             $partition['partition_id'] = $partId;
-
-            if (trim($record['key'] ?? '') !== '') {
-                $partition['messages'][] = ['value' => $record['value'], 'key' => $record['key']];
-            } else {
-                $partition['messages'][] = $record['value'];
-            }
-
-            $topicData['partitions'][$partId]      = $partition;
-            $topicData['topic_name']               = $record['topic'];
+            $partition['messages'][] = $record['value'];
+            $topicData['partitions'][$partId] = $partition;
+            $topicData['topic_name'] = $record['topic'];
             $sendData[$brokerId][$record['topic']] = $topicData;
         }
-
         return $sendData;
     }
 
-    public function close() {
-
+    public function close()
+    {
         $broker = $this->getBroker();
         $broker->close();
     }

@@ -10,7 +10,7 @@ use HKY\Kafka\Client\Producer;
  * Class NormalProducer
  * @package HKY\Kafka
  */
-class NormalProducer
+class ProducerNormal
 {
 
     private static $instance = [];
