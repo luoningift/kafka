@@ -79,6 +79,17 @@ class NormalClient implements ClientInterface
             throw new Exception("Cannot open without port.");
         }
 
+        if (! filter_var($this->host, FILTER_VALIDATE_IP)) {
+            $ip = gethostbyname($this->host);
+            if ($ip == $this->host) {
+                throw new Exception(sprintf(
+                    'couldn\'t get host info for %s',
+                    $this->host
+                ));
+            }
+            $this->host = $ip;
+        }
+
         if (!is_resource($this->client)) {
             $remoteSocket = sprintf('tcp://%s:%s', $this->host, $this->port);
             $context = stream_context_create([]);

@@ -75,6 +75,17 @@ class CoClient implements ClientInterface
             throw new Exception("Cannot open without port.");
         }
 
+        if (! filter_var($this->host, FILTER_VALIDATE_IP)) {
+            $ip = gethostbyname($this->host);
+            if ($ip == $this->host) {
+                throw new Exception(sprintf(
+                    'couldn\'t get host info for %s',
+                    $this->host
+                ));
+            }
+            $this->host = $ip;
+        }
+
         $settings = [
             'open_length_check'     => 1,
             'package_length_type'   => 'N',
