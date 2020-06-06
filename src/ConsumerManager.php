@@ -9,13 +9,19 @@ declare(strict_types=1);
  * @contact  group@hyperf.io
  * @license  https://github.com/hyperf/hyperf/blob/master/LICENSE
  */
-namespace Hyperf\Amqp;
+namespace HKY\Kafka;;
 
-use Hyperf\Amqp\Annotation\Consumer as ConsumerAnnotation;
-use Hyperf\Amqp\Message\ConsumerMessageInterface;
+use HKY\Kafka\Annotation\Consumer as ConsumerAnnotation;
+use HKY\Kafka\Client\Config\ConsumerConfig;
+use HKY\Kafka\Message\ConsumerMessageInterface;
+use Hyperf\Contract\ConfigInterface;
 use Hyperf\Di\Annotation\AnnotationCollector;
 use Hyperf\Process\AbstractProcess;
 use Hyperf\Process\ProcessManager;
+use Hyperf\Utils\Coroutine;
+use Hyperf\Utils\Coroutine\Concurrent;
+use Hyperf\Utils\Exception\ParallelExecutionException;
+use Hyperf\Utils\Parallel;
 use Psr\Container\ContainerInterface;
 
 class ConsumerManager
@@ -42,17 +48,17 @@ class ConsumerManager
             if (! $instance instanceof ConsumerMessageInterface) {
                 continue;
             }
-
-            $annotation->exchange && $instance->setExchange($annotation->exchange);
-            $annotation->routingKey && $instance->setRoutingKey($annotation->routingKey);
-            $annotation->queue && $instance->setQueue($annotation->queue);
+            $annotation->consumerNums && $instance->setConsumerNums($annotation->consumerNums);
+            $annotation->poolName && $instance->setPoolName($annotation->poolName);
+            $annotation->topic && $instance->setTopic($annotation->topic);
+            $annotation->group && $instance->setGroup($annotation->group);
             ! is_null($annotation->enable) && $instance->setEnable($annotation->enable);
             property_exists($instance, 'container') && $instance->container = $this->container;
             $annotation->maxConsumption && $instance->setMaxConsumption($annotation->maxConsumption);
-            $nums = $annotation->nums;
+            $nums = $annotation->processNums;
             $process = $this->createProcess($instance);
             $process->nums = (int) $nums;
-            $process->name = $annotation->name . '-' . $instance->getQueue();
+            $process->name = $annotation->name . '-' . $instance->getTopic();
             ProcessManager::register($process);
         }
     }
@@ -60,10 +66,6 @@ class ConsumerManager
     private function createProcess(ConsumerMessageInterface $consumerMessage): AbstractProcess
     {
         return new class($this->container, $consumerMessage) extends AbstractProcess {
-            /**
-             * @var \Hyperf\Amqp\Consumer
-             */
-            private $consumer;
 
             /**
              * @var ConsumerMessageInterface
@@ -73,18 +75,48 @@ class ConsumerManager
             public function __construct(ContainerInterface $container, ConsumerMessageInterface $consumerMessage)
             {
                 parent::__construct($container);
-                $this->consumer = $container->get(Consumer::class);
                 $this->consumerMessage = $consumerMessage;
             }
 
             public function handle(): void
             {
-                $this->consumer->consume($this->consumerMessage);
-            }
 
-            public function getConsumerMessage(): ConsumerMessageInterface
-            {
-                return $this->consumerMessage;
+                $consumerMessage = $this->consumerMessage;
+                $consumerMessage->initAtomic();
+                $concurrent = new Concurrent($this->consumerMessage->getConsumerNums());
+                while(true) {
+                    if ($consumerMessage->checkAtomic()) {
+                        $this->process->exit(0);
+                    }
+                    $concurrent->create(function () use ($consumerMessage) {
+                        $kafka = null;
+                        $config = null;
+                        try {
+                            $kafkaConfig = $this->container->get(ConfigInterface::class)->get('hky_kafka.consumer' . $consumerMessage->getPoolName());
+                            $config = new ConsumerConfig();
+                            $config->setRefreshIntervalMs(1000);
+                            $config->setMetadataBrokerList($kafkaConfig['broker_list'] ?? '127.0.0.1:9092,127.0.0.1:9093');
+                            $config->setBrokerVersion($kafkaConfig['version'] ?? '0.9.0');
+                            $config->setGroupId($consumerMessage->getGroup());
+                            $config->setTopics([$consumerMessage->getTopic()]);
+                            $config->setOffsetReset('earliest');
+                            $kafka = new Client\Consumer($config);
+                            $kafka->subscribe([$consumerMessage, 'atomicMessage']);
+                            $kafka->close();
+                            unset($kafka);
+                            unset($config);
+                        } catch (\Exception $e) {
+                            if ($kafka) {
+                                $kafka->close();
+                                unset($kafka);
+                            }
+                            if ($config) {
+                                unset($config);
+                            }
+                        }
+                        return Coroutine::id();
+                    });
+                }
             }
 
             public function isEnable(): bool

@@ -9,9 +9,9 @@ declare(strict_types=1);
  * @contact  group@hyperf.io
  * @license  https://github.com/hyperf/hyperf/blob/master/LICENSE
  */
-namespace Hyperf\Amqp\Listener;
+namespace HKY\Kafka\Listener;
 
-use Hyperf\Amqp\ConsumerManager;
+use HKY\Kafka\ConsumerManager;
 use Hyperf\Event\Contract\ListenerInterface;
 use Hyperf\Framework\Event\BeforeMainServerStart;
 use Psr\Container\ContainerInterface;

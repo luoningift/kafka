@@ -17,7 +17,7 @@ return [
             'version' => '0.9.0',
             'pool' => [
                 'min_connections' => 1,
-                'max_connections' => 10,
+                'max_connections' => 20,
                 'connect_timeout' => 1.0,
                 'wait_timeout' => 3.0,
                 'heartbeat' => -1,
@@ -27,7 +27,8 @@ return [
     ],
     'consumer' => [
         'default' => [
-
+            'broker_list' => '127.0.0.1:9092,127.0.0.1:9093',
+            'version' => '0.9.0',
         ],
     ],
 ];

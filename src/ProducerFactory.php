@@ -22,9 +22,9 @@ class ProducerFactory
 
     public function __construct(ConfigInterface $config)
     {
-        $mongoConfig = $config->get('hky_kafka');
+        $kafkaConfig = $config->get('hky_kafka.producer');
 
-        foreach ($mongoConfig as $poolName => $item) {
+        foreach ($kafkaConfig as $poolName => $item) {
             $this->proxies[$poolName] = make(ProducerProxy::class, ['pool' => $poolName]);
         }
     }

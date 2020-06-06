@@ -9,39 +9,20 @@ declare(strict_types=1);
  * @contact  group@hyperf.io
  * @license  https://github.com/hyperf/hyperf/blob/master/LICENSE
  */
-namespace Hyperf\Amqp\Message;
+namespace HKY\Kafka\Message;
 
-use Hyperf\Amqp\Builder\QueueBuilder;
-use Hyperf\Amqp\Packer\Packer;
+use HKY\Kafka\Client\Consumer\Process;
+use HKY\Kafka\Client\Exception\Exception;
 use Hyperf\Utils\ApplicationContext;
 use Psr\Container\ContainerInterface;
+use Swoole;
 
-abstract class ConsumerMessage extends Message implements ConsumerMessageInterface
+abstract class ConsumerMessage implements ConsumerMessageInterface
 {
     /**
      * @var ContainerInterface
      */
     public $container;
-
-    /**
-     * @var string
-     */
-    protected $queue;
-
-    /**
-     * @var bool
-     */
-    protected $requeue = true;
-
-    /**
-     * @var array
-     */
-    protected $routingKey = [];
-
-    /**
-     * @var null|array
-     */
-    protected $qos;
 
     /**
      * @var bool
@@ -53,43 +34,73 @@ abstract class ConsumerMessage extends Message implements ConsumerMessageInterfa
      */
     protected $maxConsumption = 0;
 
-    public function setQueue(string $queue): self
+    protected $poolName = '';
+
+    protected $consumerNums = 1;
+
+    protected $topicName = '';
+
+    protected $group = '';
+
+    /**
+     * @var Swoole\Atomic
+     */
+    protected $atomic;
+
+    public function __construct()
     {
-        $this->queue = $queue;
+
+    }
+
+    public function initAtomic() {
+        if (!$this->atomic) {
+            $this->atomic = new Swoole\Atomic();
+        }
+        $this->atomic->set(0);
+    }
+
+    public function atomicMessage(Process $process, $topic, $partition, $message) {
+        $this->atomic->add(1);
+        $this->consume($topic, $partition, $message);
+        if ($this->checkAtomic()) {
+            $process->stop();
+        }
+    }
+
+    public function checkAtomic() {
+        return $this->atomic->get() >= $this->getMaxConsumption();
+    }
+
+    public function setTopic(string $queue)
+    {
+        $this->topicName = $queue;
         return $this;
     }
 
-    public function getQueue(): string
+    public function getTopic(): string
     {
-        return $this->queue;
+        return $this->topicName;
     }
 
-    public function isRequeue(): bool
-    {
-        return $this->requeue;
+    public function setPoolName(string $poolName) {
+        $this->poolName = $poolName;
+        return $this;
     }
 
-    public function getQos(): ?array
+    public function getPoolName() : string
     {
-        return $this->qos;
+        return $this->poolName;
     }
 
-    public function getQueueBuilder(): QueueBuilder
+    public function setConsumerNums(int $consumerNums)
     {
-        return (new QueueBuilder())->setQueue($this->getQueue());
+        $this->consumerNums = $consumerNums;
+        return $this;
     }
 
-    public function unserialize(string $data)
+    public function getConsumerNums() : int
     {
-        $container = ApplicationContext::getContainer();
-        $packer = $container->get(Packer::class);
-
-        return $packer->unpack($data);
-    }
-
-    public function getConsumerTag(): string
-    {
-        return implode(',', (array) $this->getRoutingKey());
+        return $this->consumerNums;
     }
 
     public function isEnable(): bool
@@ -112,5 +123,16 @@ abstract class ConsumerMessage extends Message implements ConsumerMessageInterfa
     {
         $this->maxConsumption = $maxConsumption;
         return $this;
+    }
+
+    public function setGroup(string $group)
+    {
+        $this->group = $group;
+        return $this;
+    }
+
+    public function getGroup(): string
+    {
+        return $this->group;
     }
 }

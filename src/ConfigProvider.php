@@ -11,12 +11,18 @@ declare(strict_types=1);
  */
 namespace HKY\Kafka;
 
+
+use HKY\Kafka\Listener\BeforeMainServerStartListener;
+
 class ConfigProvider
 {
     public function __invoke(): array
     {
         return [
             'dependencies' => [
+            ],
+            'listeners' => [
+                BeforeMainServerStartListener::class => 99,
             ],
             'annotations' => [
                 'scan' => [

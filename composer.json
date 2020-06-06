@@ -14,7 +14,8 @@
         }
     ],
     "require": {
-        "php": ">=7.1.0"
+        "php": ">=7.1.0",
+        "hyperf/process": "^1.1"
     },
     "autoload": {
         "psr-4": {

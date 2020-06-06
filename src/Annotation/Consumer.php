@@ -9,7 +9,7 @@ declare(strict_types=1);
  * @contact  group@hyperf.io
  * @license  https://github.com/hyperf/hyperf/blob/master/LICENSE
  */
-namespace Hyperf\Amqp\Annotation;
+namespace HKY\Kafka\Annotation;
 
 use Hyperf\Di\Annotation\AbstractAnnotation;
 
@@ -22,27 +22,32 @@ class Consumer extends AbstractAnnotation
     /**
      * @var string
      */
-    public $exchange = '';
+    public $poolName = '';
 
     /**
      * @var string
      */
-    public $routingKey = '';
-
-    /**
-     * @var string
-     */
-    public $queue = '';
-
-    /**
-     * @var string
-     */
-    public $name = 'Consumer';
+    public $topic = '';
 
     /**
      * @var int
      */
-    public $nums = 1;
+    public $consumerNums = 3;
+
+    /**
+     * @var string
+     */
+    public $group = 'kafka_group';
+
+    /**
+     * @var string
+     */
+    public $name = 'KafkaConsumer';
+
+    /**
+     * @var int
+     */
+    public $processNums = 1;
 
     /**
      * @var null|bool

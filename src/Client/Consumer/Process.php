@@ -69,6 +69,12 @@ class Process extends BaseProcess
         return $this;
     }
 
+    public function close()
+    {
+        $broker = $this->getBroker();
+        $broker->close();
+    }
+
     /**
      * @param callable|null $consumer
      * @param float         $breakTime
@@ -77,6 +83,12 @@ class Process extends BaseProcess
      */
     public function subscribe(?callable $consumer = null, $breakTime = 0.01, $maxCurrency = 128)
     {
+
+        defer(function() {
+           $this->getGroup()->leaveGroup();
+           $this->close();
+        });
+
         // 注册消费回调
         $this->consumer = $consumer;
 
@@ -435,7 +447,7 @@ class Process extends BaseProcess
             foreach ($value as $partition => $messages) {
                 foreach ($messages as $message) {
                     if ($this->consumer !== null) {
-                        ($this->consumer)($topic, $partition, $message);
+                        ($this->consumer)($this, $topic, $partition, $message);
                     }
                 }
             }

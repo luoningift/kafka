@@ -27,6 +27,7 @@ class Consumer
         $this->process = new Process($config);
     }
 
+
     /**
      * @param callable|null $func
      * @param float         $breakTime
@@ -44,5 +45,12 @@ class Consumer
     public function stop()
     {
         $this->process->stop();
+    }
+
+    /**
+     * 释放链接
+     */
+    public function close() {
+        $this->process->close();
     }
 }

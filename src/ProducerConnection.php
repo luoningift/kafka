@@ -9,11 +9,7 @@ use Hyperf\Contract\StdoutLoggerInterface;
 use Hyperf\Pool\Connection as BaseConnection;
 use Hyperf\Pool\Exception\ConnectionException;
 use Hyperf\Pool\Pool;
-use Hyperf\Utils\ApplicationContext;
 use Psr\Container\ContainerInterface;
-use Swoole\Coroutine\Channel as CoChannel;
-use Swoole\Process;
-use Swoole\Timer;
 
 /**
  * Class ProducerConnection
@@ -46,25 +42,15 @@ class ProducerConnection extends BaseConnection implements ConnectionInterface
      */
     protected $producer = null;
 
-    protected $initLength = 100;
-
-    protected $maxLength = 50;
-
-
     /**
      * @var
      */
     protected $channel = null;
 
-    protected $timer = -1;
-
     public function __construct(ContainerInterface $container, Pool $pool, array $config)
     {
         parent::__construct($container, $pool);
         $this->config = array_replace($this->config, $config);
-        $this->channel = new CoChannel($this->initLength);
-        $this->addTimer();
-        $this->registerSignal();
     }
 
     public function __call($name, $arguments)
@@ -75,76 +61,6 @@ class ProducerConnection extends BaseConnection implements ConnectionInterface
             $result = $this->retry($name, $arguments, $exception);
         }
         return $result;
-    }
-
-    /**
-     * 带缓存buffer
-     * @param $data
-     * @return boolean
-     */
-    public function lazySend($data)
-    {
-
-        if ($this->channel->length() >= $this->maxLength) {
-            $this->batchSend();
-        }
-        foreach ($data as $one) {
-            $this->channel->push($one, 1.5);
-        }
-        return true;
-    }
-
-    /**
-     * 批量发送
-     */
-    protected function batchSend()
-    {
-
-        $queueCount = $this->channel->length();
-        while ($queueCount > 0) {
-            $popCount = $queueCount >= 30 ? 30 : $queueCount;
-            $queueCount = $queueCount - $popCount;
-            go(function () use ($popCount) {
-                $send = [];
-                for ($i = 0; $i < $popCount; $i++) {
-                    $popData = $this->channel->pop(0.05);
-                    if (is_array($popData) && $popData) {
-                        $send[] = $popData;
-                    } else {
-                        break;
-                    }
-                }
-                if ($send) {
-                    //获取连接池消费当前消息
-                    ApplicationContext::getContainer()->get(ProducerFactory::class)->get($this->config['poolName'])->send($send);
-                }
-            });
-        }
-    }
-
-    /**
-     * 注册信号
-     */
-    protected function registerSignal()
-    {
-
-        Process::signal(SIGINT, function () {
-            $this->batchSend();
-        });
-        Process::signal(SIGTERM, function () {
-            $this->batchSend();
-        });
-    }
-
-    /**
-     * 定时300ms批量发送数据
-     */
-    protected function addTimer()
-    {
-
-        $this->timer = Timer::tick(300, function () {
-            $this->batchSend();
-        });
     }
 
     /**
@@ -171,7 +87,6 @@ class ProducerConnection extends BaseConnection implements ConnectionInterface
     {
         $this->producer->close();
         $this->producer = null;
-        $this->batchSend();
         return true;
     }
 
@@ -219,16 +134,5 @@ class ProducerConnection extends BaseConnection implements ConnectionInterface
             throw $exception;
         }
         return $result;
-    }
-
-    /**
-     * 清理定时器
-     */
-    public function __destruct()
-    {
-        try {
-            Timer::clear($this->timer);
-        } catch (\Exception $e) {
-        }
     }
 }

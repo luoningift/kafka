@@ -9,25 +9,36 @@ declare(strict_types=1);
  * @contact  group@hyperf.io
  * @license  https://github.com/hyperf/hyperf/blob/master/LICENSE
  */
-namespace Hyperf\Amqp\Message;
+namespace HKY\Kafka\Message;
 
-use Hyperf\Amqp\Builder\QueueBuilder;
+use HKY\Kafka\Client\Consumer\Process;
 
-interface ConsumerMessageInterface extends MessageInterface
+interface ConsumerMessageInterface
 {
-    public function consume($data): string;
 
-    public function setQueue(string $queue);
+    public function initAtomic();
 
-    public function getQueue(): string;
+    public function atomicMessage(Process $process, $topic, $partition, $message);
 
-    public function isRequeue(): bool;
+    public function checkAtomic();
 
-    public function getQos(): ?array;
+    public function consume($topic, $partition, $message): string;
 
-    public function getQueueBuilder(): QueueBuilder;
+    public function setTopic(string $queue);
 
-    public function getConsumerTag(): string;
+    public function getTopic(): string;
+
+    public function setGroup(string $queue);
+
+    public function getGroup(): string;
+
+    public function setConsumerNums(int $consumerNums);
+
+    public function getConsumerNums() : int;
+
+    public function setPoolName(string $poolName);
+
+    public function getPoolName() : string;
 
     public function isEnable(): bool;
 
