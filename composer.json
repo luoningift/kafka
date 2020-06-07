@@ -1,25 +1,30 @@
 {
-    "name": "hky/kafka",
-    "type": "library",
-    "description": "kafka client",
-    "keywords": [
-        "kafka"
-    ],
-    "authors": [
-        {
-            "name": "luoningift",
-            "email": "nluo@kaikeba.com"
-        }
-    ],
-    "require": {
-        "php": ">=7.1.0"
-    },
-    "autoload": {
-        "psr-4": {
-            "HKY\\Kafka\\": "src/"
-        }
-    },
-    "require-dev": {
-        "easyswoole/swoole-ide-helper": "^1.3"
+  "name": "hky/kafka",
+  "type": "library",
+  "description": "kafka client",
+  "keywords": [
+    "kafka"
+  ],
+  "authors": [
+    {
+      "name": "luoningift",
+      "email": "nluo@kaikeba.com"
     }
+  ],
+  "require": {
+    "php": ">=7.1.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "HKY\\Kafka\\": "src/"
+    }
+  },
+  "require-dev": {
+    "easyswoole/swoole-ide-helper": "^1.3"
+  },
+  "extra": {
+    "hyperf": {
+      "config": "HKY\\Kafka\\ConfigProvider"
+    }
+  }
 }

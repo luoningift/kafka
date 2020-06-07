@@ -7,7 +7,7 @@
  */
 namespace HKY\Kafka\Client\Sasl;
 
-use HKY\Kafka\Client\CommonClient;
+use HKY\Kafka\Client\Client\ClientInterface;
 use HKY\Kafka\Client\Protocol;
 
 class Plain extends Mechanism
@@ -31,10 +31,10 @@ class Plain extends Mechanism
     }
 
     /**
-     * @param CommonClient $client
+     * @param ClientInterface $client
      * @throws \HKY\Kafka\Client\Exception\NotSupported
      */
-    protected function performAuthentication(CommonClient $client): void
+    protected function performAuthentication(ClientInterface $client): void
     {
         $split = Protocol\Protocol::pack(Protocol\Protocol::BIT_B8, '0');
 

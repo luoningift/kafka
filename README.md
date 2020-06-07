@@ -1,43 +1,14 @@
 # kafka
-本项目代码参考自 https://github.com/weiboad/kafka-php
+本项目代码参考自 https://github.com/easy-swoole/kafka
 
 # 安装
 ```php
-composer require easyswoole/kafka
+composer require hky/kafka
 ```
 
 ### 注册kafka服务
 ```php
-namespace EasySwoole\EasySwoole;
 
-use App\Producer\Process as ProducerProcess;
-use App\Consumer\Process as ConsumerProcess;
-use EasySwoole\EasySwoole\Swoole\EventRegister;
-use EasySwoole\EasySwoole\AbstractInterface\Event;
-use EasySwoole\Http\Request;
-use EasySwoole\Http\Response;
-
-class EasySwooleEvent implements Event
-{
-
-    public static function initialize()
-    {
-        // TODO: Implement initialize() method.
-        date_default_timezone_set('Asia/Shanghai');
-    }
-
-    public static function mainServerCreate(EventRegister $register)
-    {
-        // TODO: Implement mainServerCreate() method.
-        // 生产者
-        ServerManager::getInstance()->getSwooleServer()->addProcess((new ProducerProcess())->getProcess());
-        // 消费者
-        ServerManager::getInstance()->getSwooleServer()->addProcess((new ConsumerProcess())->getProcess());
-    }
-    
-    ......
-    
-}
 
 ```
 ### 生产者
