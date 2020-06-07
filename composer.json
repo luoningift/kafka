@@ -1,16 +1,14 @@
 {
     "name": "hky/kafka",
     "type": "library",
-    "description": "An efficient swoole framework",
+    "description": "kafka client",
     "keywords": [
         "kafka"
     ],
-    "homepage": "https://www.easyswoole.com/",
-    "license": "Apache-2.0",
     "authors": [
         {
-            "name": "YF",
-            "email": "291323003@qq.com"
+            "name": "luoningift",
+            "email": "nluo@kaikeba.com"
         }
     ],
     "require": {
