@@ -38,7 +38,7 @@ class Process extends BaseProcess
         }
 
         $params = [
-            'group_id'      => (new ConsumerConfig())->getGroupId(),
+            'group_id'      => $this->getConfig()->getGroupId(),
             'generation_id' => $this->getAssignment()->getGenerationId(),
             'member_id'     => $this->getAssignment()->getMemberId(),
         ];

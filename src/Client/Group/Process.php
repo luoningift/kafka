@@ -80,7 +80,6 @@ class Process extends BaseProcess
                 ],
             ],
         ];
-
         $requestData = Protocol::encode(Protocol::JOIN_GROUP_REQUEST, $params);
         $data = $connect->send($requestData);
         $ret = Protocol::decode(Protocol::JOIN_GROUP_REQUEST, substr($data, 8));

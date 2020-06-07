@@ -113,7 +113,6 @@ class Broker
     public function setData(array $topics, array $brokersResult): bool
     {
         $brokers = [];
-
         foreach ($brokersResult as $value) {
             $brokers[$value['nodeId']] = $value['host'] . ':' . $value['port'];
         }
@@ -254,7 +253,6 @@ class Broker
     public function getClient(string $host, int $port): ?Client
     {
         $saslProvider = $this->judgeConnectionConfig();
-
         return new Client($host, $port, $this->config);
     }
 

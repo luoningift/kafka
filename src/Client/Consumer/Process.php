@@ -85,11 +85,6 @@ class Process extends BaseProcess
     public function subscribe(ConsumerMessageInterface $consumerMessage, $breakTime = 0.01, $maxCurrency = 128)
     {
 
-        defer(function() {
-           $this->getGroup()->leaveGroup();
-           $this->close();
-        });
-
         // 注册消费回调
         $this->consumer = [$consumerMessage, 'atomicMessage'];
 

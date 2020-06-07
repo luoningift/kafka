@@ -92,7 +92,7 @@ class ConsumerManager
                         $kafka = null;
                         $config = null;
                         try {
-                            $kafkaConfig = $this->container->get(ConfigInterface::class)->get('hky_kafka.consumer' . $consumerMessage->getPoolName());
+                            $kafkaConfig = $this->container->get(ConfigInterface::class)->get('hky_kafka.consumer.' . $consumerMessage->getPoolName());
                             $config = new ConsumerConfig();
                             $config->setRefreshIntervalMs(1000);
                             $config->setMetadataBrokerList($kafkaConfig['broker_list'] ?? '127.0.0.1:9092,127.0.0.1:9093');
@@ -102,9 +102,6 @@ class ConsumerManager
                             $config->setOffsetReset('earliest');
                             $kafka = new Client\Consumer($config);
                             $kafka->subscribe($consumerMessage);
-                            $kafka->close();
-                            unset($kafka);
-                            unset($config);
                         } catch (\Exception $e) {
                             if ($kafka) {
                                 $kafka->close();

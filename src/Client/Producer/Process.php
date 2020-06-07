@@ -31,7 +31,7 @@ class Process extends BaseProcess
         parent::__construct($config);
 
         $this->recordValidator = new RecordValidator();
-
+        print_r($config->getMetadataBrokerList());
         $syncMeta = new SyncMeta\Process($config);
         $this->setBroker($syncMeta->syncMeta());
     }

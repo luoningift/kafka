@@ -31,7 +31,7 @@ class CoClient implements ClientInterface
     protected $config;
 
     /**
-     * @var \swoole_client
+     * @var CoroutineClient
      */
     protected $client;
     /**
@@ -92,10 +92,6 @@ class CoClient implements ClientInterface
             'package_length_offset' => 0,
             'package_body_offset'   => 4,
             'package_max_length'    => 1024 * 1024 * 3,
-            'timeout' => 2.5,
-            'connect_timeout' => 1.0,
-            'write_timeout' => 10.0,
-            'read_timeout' => 2.5,
         ];
 
         if (!$this->client instanceof CoClient) {
@@ -112,7 +108,7 @@ class CoClient implements ClientInterface
         }
 
         if (!$this->client->isConnected()) {
-            $connected = $this->client->connect($this->host, $this->port, 1.5);
+            $connected = $this->client->connect($this->host, $this->port, 100);
             if (!$connected) {
                 $connectStr = "tcp://{$this->host}:{$this->port}";
                 throw new ConnectionException("Connect to Kafka server {$connectStr} failed: {$this->client->errMsg}");
@@ -151,7 +147,7 @@ class CoClient implements ClientInterface
         for ($try = 0; $try <= $tries; $try++) {
             if ($this->isConnected()) {
                 $this->client->send($data);
-                return $this->client->recv(3.5);
+                return $this->client->recv(100);
             }
             $this->connect();
             continue;
