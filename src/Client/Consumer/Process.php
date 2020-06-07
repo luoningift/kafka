@@ -7,6 +7,7 @@
  */
 namespace HKY\Kafka\Client\Consumer;
 
+use HKY\Kafka\Message\ConsumerMessageInterface;
 use Swoole\Coroutine;
 use HKY\Kafka\Client\BaseProcess;
 use HKY\Kafka\Client\Config\ConsumerConfig;
@@ -76,12 +77,12 @@ class Process extends BaseProcess
     }
 
     /**
-     * @param callable|null $consumer
+     * @param ConsumerMessageInterface $consumerMessage
      * @param float         $breakTime
      * @param int           $maxCurrency
      * @throws \Throwable
      */
-    public function subscribe(?callable $consumer = null, $breakTime = 0.01, $maxCurrency = 128)
+    public function subscribe(ConsumerMessageInterface $consumerMessage, $breakTime = 0.01, $maxCurrency = 128)
     {
 
         defer(function() {
@@ -90,12 +91,17 @@ class Process extends BaseProcess
         });
 
         // 注册消费回调
-        $this->consumer = $consumer;
+        $this->consumer = [$consumerMessage, 'atomicMessage'];
 
         $this->enableListen = true;
         $running = 0;
 
         while ($this->enableListen) {
+
+            if ($consumerMessage->checkAtomic()) {
+                $this->enableListen = false;
+                break;
+            }
             if ($running >= $maxCurrency) {
                 Coroutine::sleep($breakTime);
                 continue;
@@ -447,7 +453,7 @@ class Process extends BaseProcess
             foreach ($value as $partition => $messages) {
                 foreach ($messages as $message) {
                     if ($this->consumer !== null) {
-                        ($this->consumer)($this, $topic, $partition, $message);
+                        call_user_func_array($this->consumer, [$this, $topic, $partition, $message]);
                     }
                 }
             }

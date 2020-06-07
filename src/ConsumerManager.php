@@ -101,7 +101,7 @@ class ConsumerManager
                             $config->setTopics([$consumerMessage->getTopic()]);
                             $config->setOffsetReset('earliest');
                             $kafka = new Client\Consumer($config);
-                            $kafka->subscribe([$consumerMessage, 'atomicMessage']);
+                            $kafka->subscribe($consumerMessage);
                             $kafka->close();
                             unset($kafka);
                             unset($config);

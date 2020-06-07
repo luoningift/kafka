@@ -9,6 +9,7 @@ namespace HKY\Kafka\Client;
 
 use HKY\Kafka\Client\Config\ConsumerConfig;
 use HKY\Kafka\Client\Consumer\Process;
+use HKY\Kafka\Message\ConsumerMessageInterface;
 
 class Consumer
 {
@@ -29,17 +30,17 @@ class Consumer
 
 
     /**
-     * @param callable|null $func
+     * @param ConsumerMessageInterface $consumerMessage
      * @param float         $breakTime
      * @param int           $maxCurrency
      * @throws \Throwable
      */
-    public function subscribe(?callable $func = null, $breakTime = 0.01, $maxCurrency = 128)
+    public function subscribe(ConsumerMessageInterface $consumerMessage, $breakTime = 0.01, $maxCurrency = 128)
     {
         if (!class_exists('\Swoole\Coroutine\Client') || \Swoole\Coroutine::getCid() < 0) {
             throw new \RuntimeException('only support swoole environment and in coroutine');
         }
-        $this->process->subscribe($func, $breakTime, $maxCurrency);
+        $this->process->subscribe($consumerMessage, $breakTime, $maxCurrency);
     }
 
     public function stop()
