@@ -100,6 +100,7 @@ class ConsumerManager
                             $config->setGroupId($consumerMessage->getGroup());
                             $config->setTopics([$consumerMessage->getTopic()]);
                             $config->setOffsetReset('earliest');
+                            $config->setConsumeMode(ConsumerConfig::CONSUME_BEFORE_COMMIT_OFFSET);
                             $kafka = new Client\Consumer($config);
                             $kafka->subscribe($consumerMessage);
                         } catch (\Exception $e) {
