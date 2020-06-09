@@ -79,6 +79,9 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
     }
 
     public function checkAtomic() {
+        if ($this->getMaxConsumption() == -1) {
+            return false;
+        }
         return $this->atomic->get() >= $this->getMaxConsumption();
     }
 
