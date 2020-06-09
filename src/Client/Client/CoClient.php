@@ -76,8 +76,8 @@ class CoClient implements ClientInterface
         }
 
         if (! filter_var($this->host, FILTER_VALIDATE_IP)) {
-            $ip = gethostbyname($this->host);
-            if ($ip == $this->host) {
+            $ip = \Swoole\Coroutine\System::gethostbyname($this->host);
+            if ($ip == $this->host || $ip === false) {
                 throw new Exception(sprintf(
                     'couldn\'t get host info for %s',
                     $this->host
