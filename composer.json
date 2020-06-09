@@ -1,5 +1,5 @@
 {
-  "name": "hky/kafka",
+  "name": "hky/hyperf-kafka-client",
   "type": "library",
   "description": "kafka client",
   "keywords": [

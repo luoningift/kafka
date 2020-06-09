@@ -47,9 +47,20 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
      */
     protected $atomic;
 
+    protected $isSingalExit = false;
+
     public function __construct()
     {
 
+    }
+
+    public function setSingalExit() {
+        $this->isSingalExit = true;
+        return $this;
+    }
+
+    public function getSingalExit() {
+        return $this->isSingalExit;
     }
 
     public function initAtomic() {

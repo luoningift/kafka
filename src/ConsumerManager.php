@@ -23,6 +23,7 @@ use Hyperf\Utils\Coroutine\Concurrent;
 use Hyperf\Utils\Exception\ParallelExecutionException;
 use Hyperf\Utils\Parallel;
 use Psr\Container\ContainerInterface;
+use Swoole\Process;
 
 class ConsumerManager
 {
@@ -83,9 +84,21 @@ class ConsumerManager
 
                 $consumerMessage = $this->consumerMessage;
                 $consumerMessage->initAtomic();
+
+                Process::signal(SIGINT, function () use ($consumerMessage) {
+                    $consumerMessage->setSingalExit();
+                });
+
+                Process::signal(SIGTERM, function () use ($consumerMessage) {
+                    $consumerMessage->setSingalExit();
+                });
+
                 $concurrent = new Concurrent($this->consumerMessage->getConsumerNums());
                 while(true) {
                     if ($consumerMessage->checkAtomic()) {
+                        $this->process->exit(0);
+                    }
+                    if ($consumerMessage->getSingalExit()) {
                         $this->process->exit(0);
                     }
                     $concurrent->create(function () use ($consumerMessage) {

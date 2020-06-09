@@ -69,11 +69,18 @@ class Process extends BaseProcess
     public function stop()
     {
         $this->enableListen = false;
+        try {
+            $this->getGroup()->leaveGroup();
+        } catch (\Exception $e) {}
         return $this;
     }
 
     public function close()
     {
+        try {
+            $this->getGroup()->leaveGroup();
+        } catch (\Exception $e) {}
+
         $broker = $this->getBroker();
         $broker->close();
     }
@@ -96,9 +103,21 @@ class Process extends BaseProcess
         while ($this->enableListen) {
 
             if ($consumerMessage->checkAtomic()) {
+                try {
+                    $this->getGroup()->leaveGroup();
+                } catch (\Exception $e) {}
                 $this->enableListen = false;
                 break;
             }
+
+            if ($consumerMessage->getSingalExit()) {
+                try {
+                    $this->getGroup()->leaveGroup();
+                } catch (\Exception $e) {}
+                $this->enableListen = false;
+                break;
+            }
+
             if ($running >= $maxCurrency) {
                 Coroutine::sleep($breakTime);
                 continue;

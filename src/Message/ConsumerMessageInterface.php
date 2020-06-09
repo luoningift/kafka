@@ -16,6 +16,10 @@ use HKY\Kafka\Client\Consumer\Process;
 interface ConsumerMessageInterface
 {
 
+    public function setSingalExit();
+
+    public function getSingalExit();
+
     public function initAtomic();
 
     public function atomicMessage(Process $process, $topic, $partition, $message);
