@@ -8,7 +8,7 @@
     "repositories":{
         "hky/kafka":{
             "type":"vcs",
-            "url":"git@192.168.100.11:base/hky-hyperf-kafka-client.git"
+            "url":"git@192.168.100.11:base/hky-packages-hyperf-kafka-client.git"
         }
         ....
     }
