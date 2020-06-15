@@ -464,23 +464,28 @@ class Process extends BaseProcess
      */
     private function consumeMessage(): void
     {
-        $parallel = new Parallel(100);
+        $pollMessage = [];
         foreach ($this->messages as $topic => $value) {
             foreach ($value as $partition => $messages) {
                 foreach ($messages as $message) {
-                    if ($this->consumer !== null) {
-                        $parallel->add(function() use ($topic, $partition, $message) {
-                            call_user_func_array($this->consumer, [$this, $topic, $partition, $message]);
-                        });
-                    }
+                    $pollMessage[] = [$this, $topic, $partition, $message];
+
                 }
             }
         }
-        try{
-            $results = $parallel->wait();
-        } catch(ParallelExecutionException $e){
-            // $e->getResults() 获取协程中的返回值。
-            // $e->getThrowables() 获取协程中出现的异常。
+        if ($pollMessage && $this->consumer) {
+            $parallel = new Parallel(5);
+            foreach($pollMessage as $oneMessage) {
+                $parallel->add(function() use ($oneMessage) {
+                    call_user_func_array($this->consumer, $oneMessage);
+                });
+            }
+            try {
+                $results = $parallel->wait();
+            } catch (ParallelExecutionException $e) {
+                // $e->getResults() 获取协程中的返回值。
+                // $e->getThrowables() 获取协程中出现的异常。
+            }
         }
         $this->messages = [];
     }

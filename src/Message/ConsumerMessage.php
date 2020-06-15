@@ -49,9 +49,22 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
 
     protected $isSingalExit = false;
 
+    protected $maxBytes = 65535;
+
     public function __construct()
     {
 
+    }
+
+    public function setMaxBytes(int $maxBytes)
+    {
+        $this->maxBytes = $maxBytes;
+        return $this;
+    }
+
+    public function getMaxBytes(): int
+    {
+        return intval($this->maxBytes);
     }
 
     public function setSingalExit() {
