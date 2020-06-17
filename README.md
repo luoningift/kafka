@@ -8,7 +8,7 @@
     "repositories":{
         "hky/kafka":{
             "type":"vcs",
-            "url":"git@192.168.100.11:base/hky-packages-hyperf-kafka-client.git"
+            "url":"http://icode.kaikeba.com/base/hky-packages-hyperf-kafka-client.git"
         }
         ....
     }
@@ -19,6 +19,13 @@
 $ composer require hky/kafka
 $ php bin/hyperf.php vendor:publish hky/kafka
 ```
+如果遇到错误信息为:
+`Your configuration does not allow connections to http://icode.kaikeba.com/base/hky-packages-hyperf-http-client.git. See https://getcomposer.org/doc/06-config.md#secure-http for details` 
+执行以下命令
+```bash
+$ composer config secure-http false
+```
+
 ##### 2.配置文件说明config/autoload/hky_kafka.php
 ```php
 <?php
@@ -61,16 +68,7 @@ return [
 //producer 为 kafka 生产者配置 
 //consumer 为 kafka 消费者配置
 ```
-##### 3.生产者发送消息 PHP-FPM环境
-```php
-<?php
-\HKY\Kafka\ProducerNormal::getInstance('192.168.10.1:9092,192.168.10.1:9093,192.168.10.1:9094')->send([
-    ['topic' => 'test1', 'value' => 'hello world', 'key' => 'xxx'], //key 设置key后会根据key将消息发送到固定的partition
-    ['topic' => 'test1', 'value' => 'hello world', 'key' => 'xxx'],
-    ['topic' => 'test1', 'value' => 'hello world', 'key' => 'xxx'],
-]);
-```
-##### 4.生产者发送消息 hyperf环境
+##### 3.生产者发送消息 hyperf环境
 ```php
 <?php
 use HKY\Kafka\Producer;
@@ -83,7 +81,7 @@ $this->container->get(Producer::class)->send([
 //使用其他 pool
 $this->container->get(\HKY\Kafka\ProducerFactory::class)->get('other')->send();
 ```
-##### 5.消费者消费消息 hyper环境 php-fpm环境使用rdkafka
+##### 5.消费者消费消息 
 ```php
 <?php
 declare(strict_types=1);
@@ -106,13 +104,14 @@ use Hyperf\Utils\Coroutine;
 /**
  * enable 是否启动进程 
  * poolName 对应hky_kafka配置文件consumer的key
+ * maxByte 每次拉取的消息的最大byte 比如一个消息是1byte 设置maxByte为1024 每次会拉回1024条消息
  * topic 消费的topic
  * consumerNums 启动协程消费者数量
  * processNums 启动的进程数量  消费者数量 = consumerNums * processNums
  * name 启动时设置的进程名称
  * group 消费者组
  * maxConsumption 消费多少消息后消费进程重启 不重启 写-1
- * @Consumer(enable=true, poolName="default", topic="test1", consumerNums=5, maxConsumption=10000, processNums=2, name="study_progress", group="luoningtest")
+ * @Consumer(enable=true, poolName="default", maxByte=65535, topic="test1", consumerNums=5, maxConsumption=10000, processNums=2, name="study_progress", group="luoningtest")
  */
 class StudyProgressNormalProcess extends ConsumerMessage
 {
@@ -128,11 +127,10 @@ class StudyProgressNormalProcess extends ConsumerMessage
 ```
 ##### 6.其他注意事项
 ```$xslt
-1、由于兼容php-fpm环境下producer发送消息，hyperf下面的依赖包，自行composer require 安装
-   依赖的包有hyperf/process，hyperf/pool, hyperf/utils
-2、进程异常重启后, 部分消息会重复消费，原因还未来得及提交offset
+1、进程异常重启后, 部分消息会重复消费，原因还未来得及提交offset
 ```
 ### 版本改动:
 ```$xslt
+v1.0.1   逻辑修改，使用说明文档修改
 v1.0.0   kafka协程版本
 ```
