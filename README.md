@@ -6,7 +6,7 @@
 {
     ....
     "repositories":{
-        "hky/kafka":{
+        "hky/hyperf-kafka-client":{
             "type":"vcs",
             "url":"http://icode.kaikeba.com/base/hky-packages-hyperf-kafka-client.git"
         }
