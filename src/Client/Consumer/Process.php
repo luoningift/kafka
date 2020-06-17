@@ -491,6 +491,7 @@ class Process extends BaseProcess
                 // $e->getThrowables() 获取协程中出现的异常。
             }
         }
+        $this->parallel->clear();
         $this->messages = [];
     }
 
