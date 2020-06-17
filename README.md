@@ -131,6 +131,7 @@ class StudyProgressNormalProcess extends ConsumerMessage
 ```
 ### 版本改动:
 ```$xslt
-v1.0.1   逻辑修改，使用说明文档修改
+v1.0.2   文档说明修改，逻辑修改
+v1.0.1   逻辑修改
 v1.0.0   kafka协程版本
 ```
