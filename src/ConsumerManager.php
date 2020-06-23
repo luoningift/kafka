@@ -51,6 +51,7 @@ class ConsumerManager
             }
             $annotation->consumerNums && $instance->setConsumerNums($annotation->consumerNums);
             $annotation->poolName && $instance->setPoolName($annotation->poolName);
+            $annotation->maxByte && $instance->setMaxBytes(intval($annotation->maxByte));
             $annotation->topic && $instance->setTopic($annotation->topic);
             $annotation->group && $instance->setGroup($annotation->group);
             ! is_null($annotation->enable) && $instance->setEnable($annotation->enable);
@@ -112,6 +113,7 @@ class ConsumerManager
                             $config->setBrokerVersion($kafkaConfig['version'] ?? '0.9.0');
                             $config->setGroupId($consumerMessage->getGroup());
                             $config->setTopics([$consumerMessage->getTopic()]);
+                            $config->setMaxBytes($consumerMessage->getMaxBytes());
                             $config->setOffsetReset('earliest');
                             $config->setConsumeMode(ConsumerConfig::CONSUME_BEFORE_COMMIT_OFFSET);
                             $kafka = new Client\Consumer($config);

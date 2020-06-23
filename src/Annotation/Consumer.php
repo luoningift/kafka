@@ -58,4 +58,9 @@ class Consumer extends AbstractAnnotation
      * @var int
      */
     public $maxConsumption = 0;
+
+    /**
+     * @var int
+     */
+    public $maxByte = 65535;
 }

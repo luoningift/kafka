@@ -40,6 +40,10 @@ interface ConsumerMessageInterface
 
     public function getConsumerNums() : int;
 
+    public function setMaxBytes(int $maxBytes);
+
+    public function getMaxBytes() : int;
+
     public function setPoolName(string $poolName);
 
     public function getPoolName() : string;

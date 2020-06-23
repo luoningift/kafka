@@ -61,8 +61,14 @@ class Process extends BaseProcess
 
     private $enableListen = false;
 
+    /**
+     * @var Parallel
+     */
+    private $parallel;
+
     public function __construct(ConsumerConfig $config)
     {
+        $this->parallel = new Parallel(5);
         parent::__construct($config);
     }
 
@@ -464,24 +470,28 @@ class Process extends BaseProcess
      */
     private function consumeMessage(): void
     {
-        $parallel = new Parallel(100);
+        $pollMessage = [];
         foreach ($this->messages as $topic => $value) {
             foreach ($value as $partition => $messages) {
                 foreach ($messages as $message) {
-                    if ($this->consumer !== null) {
-                        $parallel->add(function() use ($topic, $partition, $message) {
-                            call_user_func_array($this->consumer, [$this, $topic, $partition, $message]);
-                        });
-                    }
+                    $pollMessage[] = [$this, $topic, $partition, $message];
                 }
             }
         }
-        try{
-            $results = $parallel->wait();
-        } catch(ParallelExecutionException $e){
-            // $e->getResults() 获取协程中的返回值。
-            // $e->getThrowables() 获取协程中出现的异常。
+        if ($pollMessage && $this->consumer) {
+            foreach($pollMessage as $oneMessage) {
+                $this->parallel->add(function() use ($oneMessage) {
+                    call_user_func_array($this->consumer, $oneMessage);
+                });
+            }
+            try {
+                $results = $this->parallel->wait();
+            } catch (ParallelExecutionException $e) {
+                // $e->getResults() 获取协程中的返回值。
+                // $e->getThrowables() 获取协程中出现的异常。
+            }
         }
+        $this->parallel->clear();
         $this->messages = [];
     }
 
