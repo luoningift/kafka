@@ -16,8 +16,8 @@
 ```
 修改完成后执行
 ```bash
-$ composer require hky/kafka
-$ php bin/hyperf.php vendor:publish hky/kafka
+$ composer require hky/hyperf-kafka-client
+$ php bin/hyperf.php vendor:publish hky/hyperf-kafka-client
 ```
 如果遇到错误信息为:
 `Your configuration does not allow connections to http://icode.kaikeba.com/base/hky-packages-hyperf-http-client.git. See https://getcomposer.org/doc/06-config.md#secure-http for details` 
