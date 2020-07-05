@@ -111,12 +111,25 @@ use Hyperf\Utils\Coroutine;
  * name 启动时设置的进程名称
  * group 消费者组
  * maxConsumption 消费多少消息后消费进程重启 不重启 写-1
- * @Consumer(enable=true, poolName="default", maxByte=65535, topic="test1", consumerNums=5, maxConsumption=10000, processNums=2, name="study_progress", group="luoningtest")
+ * maxPollRecord 每次最多拉取多少条进行消费
+ * @Consumer(enable=true, poolName="default", maxByte=65535, maxPollRecord=5, topic="test1", consumerNums=5, maxConsumption=10000, processNums=2, name="study_progress", group="luoningtest")
  */
 class StudyProgressNormalProcess extends ConsumerMessage
 {
+    public function __construct() {
+        parent::__construct();
+         //0时0分0秒到1时0分0秒 每次poll3条记录,一次消费完后休眠100毫秒
+         //1时0分0秒到23时0分0秒 每次poll10条记录,一次消费完后休眠300毫秒
+         //23时0分0秒到23时59分0秒 每次poll10条记录,一次消费完后休眠500毫秒
+        $this->setTimeMaxPollRecord(['000000'=> [3, 100], '010000' => [10, 300], '230000' => [20, 500]]);
+    }
+
     public function consume($topic, $partition, $message): string
     {
+        //暂停消费 配合swoole timer定时控制
+        $this->setOffConsume();       
+        //开始消费
+        $this->setOnConsume();
         echo 'partition:' . $partition . 'message:' . $message['message']['value'] . PHP_EOL;
         echo '总共消费了 ' . $this->atomic->get() . ' 条, 进程ID是 '.posix_getpid().' 协程id是 ' . Coroutine::id() . PHP_EOL;
         return 'success';
@@ -131,6 +144,7 @@ class StudyProgressNormalProcess extends ConsumerMessage
 ```
 ### 版本改动:
 ```$xslt
+v1.0.3   增加控制消费频率，控制队列是否消费开关，增加consumer注解最大拉取条数
 v1.0.2   文档说明修改，逻辑修改
 v1.0.1   逻辑修改
 v1.0.0   kafka协程版本

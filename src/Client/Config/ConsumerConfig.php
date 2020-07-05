@@ -15,6 +15,7 @@ use HKY\Kafka\Client\Exception;
  * @method int getRebalanceTimeout()
  * @method string getOffsetReset()
  * @method int getMaxBytes()
+ * @method int getMaxPollRecord()
  * @method int getMinBytes()
  * @method int getMaxWaitTime()
  * @method array getOffsets()
@@ -50,6 +51,7 @@ class ConsumerConfig extends Config
         'offsets'          => [],// offset by peer partitions on the brokers
         'key'              => '',
         'specifyPartition' => -1,
+        'maxPollRecord'    => 5,
         'topics'           => [],
         'consumeStatus'    => true,//todo
     ];
@@ -95,6 +97,19 @@ class ConsumerConfig extends Config
         }
 
         $this->options['sessionTimeout'] = $sessionTimeout;
+    }
+
+    /**
+     * @param int $maxPollRecord
+     * @throws Exception\Config
+     */
+    public function setMaxPollRecord(int $maxPollRecord): void
+    {
+        if ($maxPollRecord < 1 || $maxPollRecord > 3000) {
+            throw new Exception\Config('Set maxPollRecord value is invalid, must set it 1 .. 3000');
+        }
+
+        $this->options['maxPollRecord'] = $maxPollRecord;
     }
 
     /**
