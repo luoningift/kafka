@@ -57,6 +57,7 @@ class ConsumerManager
             ! is_null($annotation->enable) && $instance->setEnable($annotation->enable);
             property_exists($instance, 'container') && $instance->container = $this->container;
             $annotation->maxConsumption && $instance->setMaxConsumption($annotation->maxConsumption);
+            $annotation->maxPollRecord && $instance->setMaxPollRecord($annotation->maxPollRecord);
             $nums = $annotation->processNums;
             $process = $this->createProcess($instance);
             $process->nums = (int) $nums;
@@ -114,6 +115,7 @@ class ConsumerManager
                             $config->setGroupId($consumerMessage->getGroup());
                             $config->setTopics([$consumerMessage->getTopic()]);
                             $config->setMaxBytes($consumerMessage->getMaxBytes());
+                            $config->setMaxPollRecord($consumerMessage->getMaxPollRecord());
                             $config->setOffsetReset('earliest');
                             $config->setConsumeMode(ConsumerConfig::CONSUME_BEFORE_COMMIT_OFFSET);
                             $kafka = new Client\Consumer($config);
@@ -122,9 +124,6 @@ class ConsumerManager
                             if ($kafka) {
                                 $kafka->close();
                                 unset($kafka);
-                            }
-                            if ($config) {
-                                unset($config);
                             }
                         }
                         return Coroutine::id();

@@ -26,7 +26,7 @@ interface ConsumerMessageInterface
 
     public function checkAtomic();
 
-    public function consume($topic, $partition, $message): string;
+    public function consume($topic, $partition, $message);
 
     public function setTopic(string $queue);
 
@@ -44,6 +44,10 @@ interface ConsumerMessageInterface
 
     public function getMaxBytes() : int;
 
+    public function setMaxPollRecord(int $maxPollRecord);
+
+    public function getMaxPollRecord() : int;
+
     public function setPoolName(string $poolName);
 
     public function getPoolName() : string;
@@ -55,4 +59,14 @@ interface ConsumerMessageInterface
     public function getMaxConsumption(): int;
 
     public function setMaxConsumption(int $maxConsumption);
+
+    public function setTimeMaxPollRecord(array $maxPollRecord);
+
+    public function getTimeMaxPollRecord() : array;
+
+    public function setOnConsume();
+
+    public function setOffConsume();
+
+    public function getConsumeControl();
 }
