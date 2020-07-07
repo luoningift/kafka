@@ -14,6 +14,7 @@ namespace HKY\Kafka\Message;
 
 use HKY\Kafka\Client\Consumer\Process;
 use HKY\Kafka\Client\Exception\Exception;
+use HKY\Kafka\Frequency\FrequencyInterface;
 use Hyperf\Utils\ApplicationContext;
 use Psr\Container\ContainerInterface;
 use Swoole;
@@ -54,11 +55,10 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
 
     protected $maxPollRecord = 5;
 
-    //调用setMaxTimePollRecord 小时秒 ['000000'=> [3, 100], '010000' => [10, 300], '230000' => [20, 500]]
-    //0时0分0秒到1时0分0秒 每次poll3条记录,一次消费完后休眠100毫秒
-    //1时0分0秒到23时0分0秒 每次poll10条记录,一次消费完后休眠300毫秒
-    //23时0分0秒到23时59分0秒 每次poll10条记录,一次消费完后休眠500毫秒
-    protected $maxTimePollRecord = [];
+    /**
+     * @var FrequencyInterface
+     */
+    protected $frequency;
 
     //控制是否消费消息
     protected $isConsume = true;
@@ -193,34 +193,18 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
         return $this;
     }
 
-    public function setTimeMaxPollRecord(array $maxTimePollRecord)
+    public function setFrequency(FrequencyInterface $frequency)
     {
-
-        $maxTimePollRecord = array_reverse($maxTimePollRecord, true);
-        $getConfig = function ($time) use ($maxTimePollRecord) {
-            foreach ($maxTimePollRecord as $configTime => $config) {
-                if (intval($time) >= intval($configTime)) {
-                    return $config;
-                }
-            }
-            return [5, 0];
-        };
-        $this->maxTimePollRecord = [];
-        for ($hour = 0; $hour < 24; $hour++) {
-            for ($minute = 0; $minute < 60; $minute++) {
-                for ($second = 0; $second < 60; $second++) {
-                    $key = str_pad(strval($hour), 2, "0", STR_PAD_LEFT) . str_pad(strval($minute), 2, "0", STR_PAD_LEFT) . str_pad(strval($second), 2, "0", STR_PAD_LEFT);
-                    $this->maxTimePollRecord[$key] = $getConfig($key);
-                }
-            }
-        }
-        return $this;
+        $this->frequency = $frequency;
     }
 
-    public function getTimeMaxPollRecord(): array
+    public function getFrequency(): array
     {
-        $time = date('His');
-        return $this->maxTimePollRecord[$time] ?? [];
+        if ($this->frequency instanceof FrequencyInterface) {
+            $rate = $this->frequency->get();
+            return count($rate) == 2 && is_integer($rate[0]) && is_integer($rate[1]) && $rate[1] <= 1000 ? $rate : [];
+        }
+        return [];
     }
 
     public function setOffConsume()
@@ -238,5 +222,9 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
     public function getConsumeControl() {
 
         return $this->isConsume;
+    }
+
+    public function init()
+    {
     }
 }

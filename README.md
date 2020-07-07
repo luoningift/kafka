@@ -116,23 +116,41 @@ use Hyperf\Utils\Coroutine;
  */
 class StudyProgressNormalProcess extends ConsumerMessage
 {
-    public function __construct() {
-        parent::__construct();
-         //0时0分0秒到1时0分0秒 每次poll3条记录,一次消费完后休眠100毫秒
-         //1时0分0秒到23时0分0秒 每次poll10条记录,一次消费完后休眠300毫秒
-         //23时0分0秒到23时59分0秒 每次poll10条记录,一次消费完后休眠500毫秒
-        $this->setTimeMaxPollRecord(['000000'=> [3, 100], '010000' => [10, 300], '230000' => [20, 500]]);
+    public function init() {
+          $frequency = $this->container->get(TimeFrequency::class);
+          $frequency->set(['000000'=>[1, 1000], '090000'=>[2, 400]]);
+          //设置消费策略处理类 使用container获取单例 策略可以动态修改
+          $this->setFrequency($frequency);
+          
+          //启动时设置不消费消息
+          $this->setOffConsume();
+          //12秒后开始消费消息
+          Swoole\Timer::after(12000, function() {
+              echo "beginConsumer" . PHP_EOL;
+              $this->setOnConsume();
+          });
+          //18秒后设置不消费消息
+          Swoole\Timer::after(18000, function() {
+              echo "endConsumer" . PHP_EOL;
+              $this->setOffConsume();
+          });
+          //26秒后开始消费消息
+          Swoole\Timer::after(26000, function() {
+              echo "beginConsumer" . PHP_EOL;
+              $this->setOnConsume();
+          });
     }
 
     public function consume($topic, $partition, $message): string
     {
-        //暂停消费 配合swoole timer定时控制
-        $this->setOffConsume();       
-        //开始消费
-        $this->setOnConsume();
         echo 'partition:' . $partition . 'message:' . $message['message']['value'] . PHP_EOL;
         echo '总共消费了 ' . $this->atomic->get() . ' 条, 进程ID是 '.posix_getpid().' 协程id是 ' . Coroutine::id() . PHP_EOL;
         return 'success';
+    }
+    
+    //除自定义策略类以外 可以重写getFrequency方法控制策略
+    public function getFrequency() : array{
+        return [1, 0];
     }
 }
 //consume方法结果请返回string
@@ -141,6 +159,12 @@ class StudyProgressNormalProcess extends ConsumerMessage
 ##### 6.其他注意事项
 ```$xslt
 1、进程异常重启后, 部分消息会重复消费，原因还未来得及提交offset
+2、设置策略处理类可以自定义类 需实现HKY\Kafka\Frequency\FrequencyInterface接口 实现get方法，返回数据格式如下
+   * @example [1,1] 表示每次拉取一个消息，消费完后休眠1毫秒
+   * @example [1,0] 表示每次拉取一个消息，消费完后休眠0毫秒
+   * @example [0,0] 表示不拉取消息
+   *                休眠时间需小于等于1000 否则不生效
+3、除设置策略处理类外 可以重写ConsumerMessage的getFrequency方法
 ```
 ### 版本改动:
 ```$xslt

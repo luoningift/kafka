@@ -48,13 +48,7 @@ class Producer
             // Execute the command with the arguments.
             $result = $connection->{$name}(...$arguments);
         } finally {
-            // Release connection.
-            if (! $hasContextConnection) {
-                Context::set($this->getContextKey(), $connection);
-                defer(function () use ($connection) {
-                    $connection->release();
-                });
-            }
+            $connection->release();
         }
         return $result;
     }

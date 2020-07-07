@@ -153,9 +153,14 @@ class Process extends BaseProcess
                 //control is consume
                 if ($consumerMessage->getConsumeControl()) {
                     //根据时间获取配置文件
-                    $timeConsumerConfig = $consumerMessage->getTimeMaxPollRecord();
+                    $timeConsumerConfig = $consumerMessage->getFrequency();
                     $sleepTime = 0;
-                    if ($timeConsumerConfig) {
+                    if (is_array($timeConsumerConfig)
+                        && count($timeConsumerConfig) == 2
+                        && is_integer($timeConsumerConfig[0])
+                        && is_integer($timeConsumerConfig[1])
+                        && $timeConsumerConfig[1] <= 1000
+                    ) {
                         $this->maxPollRecord = $timeConsumerConfig[0];
                         $sleepTime = $timeConsumerConfig[1] / 1000;
                     }
@@ -167,8 +172,8 @@ class Process extends BaseProcess
                         $this->commit();
                         if ($fetchMessage) {
                             $sleepTime = $sleepTime - number_format(microtime(true) - $executeStartTime, 3, '.', '');
-                            if ($sleepTime > 0) {
-                                Coroutine::sleep($defaultSleepTime);
+                            if ($sleepTime >= 0.001) {
+                                Coroutine::sleep($sleepTime);
                             }
                         } else {
                             Coroutine::sleep($defaultSleepTime);

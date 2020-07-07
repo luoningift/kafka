@@ -85,7 +85,9 @@ class ProducerConnection extends BaseConnection implements ConnectionInterface
      */
     public function close(): bool
     {
-        $this->producer->close();
+        if ($this->producer) {
+            $this->producer->close();
+        }
         $this->producer = null;
         return true;
     }
