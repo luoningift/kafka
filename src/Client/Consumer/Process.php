@@ -5,6 +5,7 @@
  * Date: 2019/9/18
  * Time: 上午10:31
  */
+
 namespace HKY\Kafka\Client\Consumer;
 
 use HKY\Kafka\Message\ConsumerMessageInterface;
@@ -66,9 +67,12 @@ class Process extends BaseProcess
      */
     private $parallel;
 
+    private $maxPollRecord = 5;
+
     public function __construct(ConsumerConfig $config)
     {
         $this->parallel = new Parallel(5);
+        $this->maxPollRecord = $config->getMaxPollRecord();
         parent::__construct($config);
     }
 
@@ -77,7 +81,8 @@ class Process extends BaseProcess
         $this->enableListen = false;
         try {
             $this->getGroup()->leaveGroup();
-        } catch (\Exception $e) {}
+        } catch (\Exception $e) {
+        }
         return $this;
     }
 
@@ -85,7 +90,8 @@ class Process extends BaseProcess
     {
         try {
             $this->getGroup()->leaveGroup();
-        } catch (\Exception $e) {}
+        } catch (\Exception $e) {
+        }
 
         $broker = $this->getBroker();
         $broker->close();
@@ -93,8 +99,8 @@ class Process extends BaseProcess
 
     /**
      * @param ConsumerMessageInterface $consumerMessage
-     * @param float         $breakTime
-     * @param int           $maxCurrency
+     * @param float $breakTime
+     * @param int $maxCurrency
      * @throws \Throwable
      */
     public function subscribe(ConsumerMessageInterface $consumerMessage, $breakTime = 0.01, $maxCurrency = 128)
@@ -106,12 +112,15 @@ class Process extends BaseProcess
         $this->enableListen = true;
         $running = 0;
 
+        $defaultSleepTime = $this->getConfig()->getRefreshIntervalMs() / 1000;
+
         while ($this->enableListen) {
 
             if ($consumerMessage->checkAtomic()) {
                 try {
                     $this->getGroup()->leaveGroup();
-                } catch (\Exception $e) {}
+                } catch (\Exception $e) {
+                }
                 $this->enableListen = false;
                 break;
             }
@@ -119,7 +128,8 @@ class Process extends BaseProcess
             if ($consumerMessage->getSingalExit()) {
                 try {
                     $this->getGroup()->leaveGroup();
-                } catch (\Exception $e) {}
+                } catch (\Exception $e) {
+                }
                 $this->enableListen = false;
                 break;
             }
@@ -140,17 +150,42 @@ class Process extends BaseProcess
 
                 $this->heartbeat();
 
-                $this->getListOffset();
-
-                $this->fetchOffset();
-
-                $fetchMessage = $this->fetchMsg();
-                $this->commit();
-
-                if (empty($fetchMessage)) {
-                    Coroutine::sleep($this->getConfig()->getRefreshIntervalMs() / 1000);
+                //control is consume
+                if ($consumerMessage->getConsumeControl()) {
+                    //根据时间获取配置文件
+                    $timeConsumerConfig = $consumerMessage->getFrequency();
+                    $sleepTime = 0;
+                    if (is_array($timeConsumerConfig)
+                        && count($timeConsumerConfig) == 2
+                        && is_integer($timeConsumerConfig[0])
+                        && is_integer($timeConsumerConfig[1])
+                        && $timeConsumerConfig[1] <= 1000
+                    ) {
+                        $this->maxPollRecord = $timeConsumerConfig[0];
+                        $sleepTime = $timeConsumerConfig[1] / 1000;
+                    }
+                    if ($this->maxPollRecord > 0) {
+                        $executeStartTime = microtime(true);
+                        $this->getListOffset();
+                        $this->fetchOffset();
+                        $fetchMessage = $this->fetchMsg();
+                        $this->commit();
+                        if ($fetchMessage) {
+                            $sleepTime = $sleepTime - number_format(microtime(true) - $executeStartTime, 3, '.', '');
+                            if ($sleepTime >= 0.001) {
+                                Coroutine::sleep($sleepTime);
+                            }
+                        } else {
+                            Coroutine::sleep($defaultSleepTime);
+                        }
+                    } else {
+                        //不拉取消息 默认休眠一秒
+                        Coroutine::sleep($defaultSleepTime);
+                    }
+                } else {
+                    //开关控制不消费 默认休眠一秒
+                    Coroutine::sleep($defaultSleepTime);
                 }
-
             } catch (Exception\ErrorCodeException $codeException) {
                 $this->getAssignment()->setJoinFuture(true);
 //                echo '----------------group 成员 或者 partition数量变更 需要重新入组与分配partition'.PHP_EOL;
@@ -180,7 +215,7 @@ class Process extends BaseProcess
     public function getGroupNodeId()
     {
         $results = $this->getGroup()->getGroupBrokerId();
-        if (! isset($results['errorCode'], $results['nodeId'])
+        if (!isset($results['errorCode'], $results['nodeId'])
             || $results['errorCode'] !== Protocol::NO_ERROR
         ) {
             $this->stateConvert($results['errorCode']);
@@ -202,12 +237,12 @@ class Process extends BaseProcess
     }
 
     /**
-     * @throws Exception\ConnectionException
+     * @return bool
      * @throws Exception\ErrorCodeException
      * @throws Exception\Exception
-     * @return bool
+     * @throws Exception\ConnectionException
      */
-    protected function joinGroup() : bool
+    protected function joinGroup(): bool
     {
         $result = $this->getGroup()->joinGroup();
         if (isset($result['errorCode']) && $result['errorCode'] !== Protocol::NO_ERROR) {
@@ -222,7 +257,7 @@ class Process extends BaseProcess
     }
 
     /**
-     * @param  bool $isLeader
+     * @param bool $isLeader
      * @throws Exception\ConnectionException
      * @throws Exception\ErrorCodeException
      * @throws Exception\Exception
@@ -268,9 +303,9 @@ class Process extends BaseProcess
     public function getListOffset()
     {
         // 获取分区的offset列表
-        $results        = $this->getOffset()->listOffset();
-        $offsets        = $this->getAssignment()->getOffsets();
-        $lastOffsets    = $this->getAssignment()->getLastOffsets();
+        $results = $this->getOffset()->listOffset();
+        $offsets = $this->getAssignment()->getOffsets();
+        $lastOffsets = $this->getAssignment()->getLastOffsets();
 
         foreach ($results as $topic) {
             foreach ($topic['partitions'] as $part) {
@@ -279,8 +314,8 @@ class Process extends BaseProcess
                     continue;
                 }
 
-                $offsets[$topic['topicName']][$part['partition']]       = end($part['offsets']);
-                $lastOffsets[$topic['topicName']][$part['partition']]   = $part['offsets'][0];
+                $offsets[$topic['topicName']][$part['partition']] = end($part['offsets']);
+                $lastOffsets[$topic['topicName']][$part['partition']] = $part['offsets'][0];
             }
         }
         $this->getAssignment()->setOffsets($offsets);
@@ -321,8 +356,8 @@ class Process extends BaseProcess
         }
         $this->getAssignment()->setFetchOffsets($offsets);
 
-        $consumerOffsets    = $this->getAssignment()->getConsumerOffsets();
-        $lastOffsets        = $this->getAssignment()->getLastOffsets();
+        $consumerOffsets = $this->getAssignment()->getConsumerOffsets();
+        $lastOffsets = $this->getAssignment()->getLastOffsets();
 
         if (empty($consumerOffsets)) {
             $consumerOffsets = $this->getAssignment()->getFetchOffsets();
@@ -351,7 +386,9 @@ class Process extends BaseProcess
             return [];
         }
         $fetchMessage = [];
-        foreach ($results['topics'] as $k => $topic) {
+        $hasFetchMessageCount = 0;
+        shuffle($results['topics']);
+        foreach ($results['topics'] as $topic) {
             foreach ($topic['partitions'] as $part) {
                 if ($part['errorCode'] !== 0) {
                     $this->stateConvert($part['errorCode'], [
@@ -364,21 +401,30 @@ class Process extends BaseProcess
                 if ($offset === null) {
                     return [];
                 }
-
+                $innerCount = 0;
                 foreach ($part['messages'] as $message) {
                     if (!empty($message)) {
+                        if ($hasFetchMessageCount == $this->maxPollRecord) {
+                            break;
+                        }
                         array_push($fetchMessage, $message);
                         $this->messages[$topic['topicName']][$part['partition']][] = $message;
                         $offset = $message['offset'];// 当前消息的偏移量
-//                        echo '-----------------订阅到新的消息需要处理-----topic:'.$topic['topicName'].'-------partition:'.$part['partition'].'------offset:'.$offset.'--------------'.PHP_EOL;
                         $this->getAssignment()->setCommitOffset($topic['topicName'], $part['partition'], $offset);
+                        $hasFetchMessageCount++;
+                        $innerCount++;
                     }
                 }
-                $consumerOffset = ($part['highwaterMarkOffset'] > $offset) ? ($offset + 1) : $offset;
-                $this->getAssignment()->setConsumerOffset($topic['topicName'], $part['partition'], $consumerOffset);
+                if ($innerCount > 0) {
+                    if (count($part['messages']) == $innerCount) {
+                        $consumerOffset = ($part['highwaterMarkOffset'] > $offset) ? ($offset + 1) : $offset;
+                    } else {
+                        $consumerOffset = $offset + 1;
+                    }
+                    $this->getAssignment()->setConsumerOffset($topic['topicName'], $part['partition'], $consumerOffset);
+                }
             }
         }
-
         return $fetchMessage;
     }
 
@@ -415,7 +461,7 @@ class Process extends BaseProcess
     }
 
     /**
-     * @param int        $errorCode
+     * @param int $errorCode
      * @param array|null $context
      * @throws Exception\ErrorCodeException
      */
@@ -451,14 +497,14 @@ class Process extends BaseProcess
             $this->getAssignment()->clearOffset();
         }
         if ($errorCode === Protocol::OFFSET_OUT_OF_RANGE) {
-            $resetOffset      = $this->getConfig()->getOffsetReset();
-            $offsets          = $resetOffset === 'latest' ?
+            $resetOffset = $this->getConfig()->getOffsetReset();
+            $offsets = $resetOffset === 'latest' ?
                 $this->getAssignment()->getLastOffsets() : $this->getAssignment()->getOffsets();
 
             [$topic, $partId] = $context;
 
             if (isset($offsets[$topic][$partId])) {
-                $this->getAssignment()->setConsumerOffset($topic, (int) $partId, $offsets[$topic][$partId]);
+                $this->getAssignment()->setConsumerOffset($topic, (int)$partId, $offsets[$topic][$partId]);
             }
         }
 //        echo '--------------'.$errorCode.'--------'.Protocol::getError($errorCode).PHP_EOL;
@@ -479,8 +525,8 @@ class Process extends BaseProcess
             }
         }
         if ($pollMessage && $this->consumer) {
-            foreach($pollMessage as $oneMessage) {
-                $this->parallel->add(function() use ($oneMessage) {
+            foreach ($pollMessage as $oneMessage) {
+                $this->parallel->add(function () use ($oneMessage) {
                     call_user_func_array($this->consumer, $oneMessage);
                 });
             }
@@ -497,7 +543,7 @@ class Process extends BaseProcess
 
     /**
      * @param \Throwable $throwable
-     * @param mixed      ...$args
+     * @param mixed ...$args
      * @throws \Throwable
      */
     protected function onException(\Throwable $throwable, ...$args)

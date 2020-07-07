@@ -9,10 +9,12 @@ declare(strict_types=1);
  * @contact  group@hyperf.io
  * @license  https://github.com/hyperf/hyperf/blob/master/LICENSE
  */
+
 namespace HKY\Kafka\Message;
 
 use HKY\Kafka\Client\Consumer\Process;
 use HKY\Kafka\Client\Exception\Exception;
+use HKY\Kafka\Frequency\FrequencyInterface;
 use Hyperf\Utils\ApplicationContext;
 use Psr\Container\ContainerInterface;
 use Swoole;
@@ -51,6 +53,16 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
 
     protected $maxBytes = 65535;
 
+    protected $maxPollRecord = 5;
+
+    /**
+     * @var FrequencyInterface
+     */
+    protected $frequency;
+
+    //控制是否消费消息
+    protected $isConsume = true;
+
     public function __construct()
     {
 
@@ -67,23 +79,27 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
         return intval($this->maxBytes);
     }
 
-    public function setSingalExit() {
+    public function setSingalExit()
+    {
         $this->isSingalExit = true;
         return $this;
     }
 
-    public function getSingalExit() {
+    public function getSingalExit()
+    {
         return $this->isSingalExit;
     }
 
-    public function initAtomic() {
+    public function initAtomic()
+    {
         if (!$this->atomic) {
             $this->atomic = new Swoole\Atomic();
         }
         $this->atomic->set(0);
     }
 
-    public function atomicMessage(Process $process, $topic, $partition, $message) {
+    public function atomicMessage(Process $process, $topic, $partition, $message)
+    {
         $this->atomic->add(1);
         $this->consume($topic, $partition, $message);
         if ($this->checkAtomic()) {
@@ -91,7 +107,8 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
         }
     }
 
-    public function checkAtomic() {
+    public function checkAtomic()
+    {
         if ($this->getMaxConsumption() == -1) {
             return false;
         }
@@ -109,12 +126,13 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
         return $this->topicName;
     }
 
-    public function setPoolName(string $poolName) {
+    public function setPoolName(string $poolName)
+    {
         $this->poolName = $poolName;
         return $this;
     }
 
-    public function getPoolName() : string
+    public function getPoolName(): string
     {
         return $this->poolName;
     }
@@ -125,7 +143,7 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
         return $this;
     }
 
-    public function getConsumerNums() : int
+    public function getConsumerNums(): int
     {
         return $this->consumerNums;
     }
@@ -161,5 +179,52 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
     public function getGroup(): string
     {
         return $this->group;
+    }
+
+    public function getMaxPollRecord(): int
+    {
+
+        return $this->maxPollRecord;
+    }
+
+    public function setMaxPollRecord(int $maxPollRecord)
+    {
+        $this->maxPollRecord = $maxPollRecord;
+        return $this;
+    }
+
+    public function setFrequency(FrequencyInterface $frequency)
+    {
+        $this->frequency = $frequency;
+    }
+
+    public function getFrequency(): array
+    {
+        if ($this->frequency instanceof FrequencyInterface) {
+            $rate = $this->frequency->get();
+            return count($rate) == 2 && is_integer($rate[0]) && is_integer($rate[1]) && $rate[1] <= 1000 ? $rate : [];
+        }
+        return [];
+    }
+
+    public function setOffConsume()
+    {
+        $this->isConsume = false;
+        return $this;
+    }
+
+    public function setOnConsume()
+    {
+        $this->isConsume = true;
+        return $this;
+    }
+
+    public function getConsumeControl() {
+
+        return $this->isConsume;
+    }
+
+    public function init()
+    {
     }
 }
