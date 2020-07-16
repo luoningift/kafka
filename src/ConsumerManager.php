@@ -85,6 +85,7 @@ class ConsumerManager
             {
 
                 $consumerMessage = $this->consumerMessage;
+                $consumerMessage->init();
                 $consumerMessage->initAtomic();
 
                 Process::signal(SIGINT, function () use ($consumerMessage) {

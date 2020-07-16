@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace HKY\Kafka\Message;
 
 use HKY\Kafka\Client\Consumer\Process;
+use HKY\Kafka\Frequency\FrequencyInterface;
 
 interface ConsumerMessageInterface
 {
@@ -60,13 +61,15 @@ interface ConsumerMessageInterface
 
     public function setMaxConsumption(int $maxConsumption);
 
-    public function setTimeMaxPollRecord(array $maxPollRecord);
+    public function setFrequency(FrequencyInterface $frequency);
 
-    public function getTimeMaxPollRecord() : array;
+    public function getFrequency() : array;
 
     public function setOnConsume();
 
     public function setOffConsume();
 
     public function getConsumeControl();
+
+    public function init();
 }
