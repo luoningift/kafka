@@ -23,6 +23,7 @@ use HKY\Kafka\Client\Exception;
  * @method int getSpecifyPartition()
  * @method array getTopics()
  * @method bool getConsumeStatus()
+ * @method int getBufferNumber()
  */
 class ConsumerConfig extends Config
 {
@@ -52,6 +53,7 @@ class ConsumerConfig extends Config
         'key'              => '',
         'specifyPartition' => -1,
         'maxPollRecord'    => 5,
+        'bufferNumber'        => 5,
         'topics'           => [],
         'consumeStatus'    => true,//todo
     ];
@@ -110,6 +112,18 @@ class ConsumerConfig extends Config
         }
 
         $this->options['maxPollRecord'] = $maxPollRecord;
+    }
+
+    /**
+     * @param int $bufferNumber
+     * @throws Exception\Config
+     */
+    public function setBufferNumber(int $bufferNumber): void
+    {
+        if ($bufferNumber < 1 || $bufferNumber > 3000) {
+            throw new Exception\Config('Set bufferNumber value is invalid, must set it 1 .. 3000');
+        }
+        $this->options['bufferNumber'] = $bufferNumber;
     }
 
     /**

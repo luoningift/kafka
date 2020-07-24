@@ -71,5 +71,9 @@ interface ConsumerMessageInterface
 
     public function getConsumeControl();
 
+    public function setBufferNumber(int $bufferNumber);
+
+    public function getBufferNumber();
+
     public function init();
 }

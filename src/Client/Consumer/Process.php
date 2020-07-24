@@ -65,18 +65,21 @@ class Process extends BaseProcess
     private $enableListen = false;
 
     /**
-     * @var Parallel
+     * @var Coroutine\Channel
      */
-    private $parallel;
+    private $buffer;
 
     private $maxPollRecord = 5;
+
+    private $bufferNumber = 5;
 
     private $logger;
 
     public function __construct(ConsumerConfig $config)
     {
-        $this->parallel = new Parallel(5);
         $this->maxPollRecord = $config->getMaxPollRecord();
+        $this->bufferNumber = $config->getBufferNumber();
+        $this->buffer = new Coroutine\Channel($this->bufferNumber);
         $this->logger = ApplicationContext::getContainer()->get(\Hyperf\Logger\LoggerFactory::class)->get('kafka');
         parent::__construct($config);
     }
@@ -175,6 +178,42 @@ class Process extends BaseProcess
     }
 
     /**
+     * 创建消费者
+     */
+    public function createCoroutineConsumer() {
+
+        go(function() {
+            $consumerNumbers = $this->bufferNumber;
+            $concurrent = new Concurrent($consumerNumbers);
+            while(true) {
+                $concurrent->create(function () {
+                    while (true) {
+                        if (!$this->enableListen) {
+                            break;
+                        }
+                        try {
+                            $message = $this->buffer->pop(0.5);
+                            if ($message && is_array($message)) {
+                                $parallel = new Parallel(1);
+                                $parallel->add(function () use ($message) {
+                                    call_user_func_array($this->consumer, $message);
+                                });
+                                $parallel->wait();
+                            }
+                            Coroutine::sleep(0.001);
+                        } catch (\Throwable $throwable) {
+                            $this->logger->error('消费消息：' . $throwable->getMessage(), ['topic' => $this->topics, 'code' => $throwable->getCode(), 'trace' => $throwable->getTraceAsString(), 'file' => $throwable->getFile(), 'line' => $throwable->getLine()]);
+                        }
+                    }
+                });
+                if (!$this->enableListen) {
+                    break;
+                }
+            }
+        });
+    }
+
+    /**
      * @param ConsumerMessageInterface $consumerMessage
      * @param float $breakTime
      * @param int $maxCurrency
@@ -189,6 +228,7 @@ class Process extends BaseProcess
         $defaultSleepTime = $this->getConfig()->getRefreshIntervalMs() / 1000;
         // 计入组和定时发送心跳
         $this->joinHeartbeat($consumerMessage);
+        $this->createCoroutineConsumer();
 
         while ($this->enableListen) {
             if ($this->leaveGroup($consumerMessage)) {
@@ -567,28 +607,13 @@ class Process extends BaseProcess
      */
     private function consumeMessage(): void
     {
-        $pollMessage = [];
         foreach ($this->messages as $topic => $value) {
             foreach ($value as $partition => $messages) {
                 foreach ($messages as $message) {
-                    $pollMessage[] = [$this, $topic, $partition, $message];
+                    $this->buffer->push([$this, $topic, $partition, $message]);
                 }
             }
         }
-        if ($pollMessage && $this->consumer) {
-            foreach ($pollMessage as $oneMessage) {
-                $this->parallel->add(function () use ($oneMessage) {
-                    call_user_func_array($this->consumer, $oneMessage);
-                });
-            }
-            try {
-                $results = $this->parallel->wait();
-            } catch (ParallelExecutionException $e) {
-                // $e->getResults() 获取协程中的返回值。
-                // $e->getThrowables() 获取协程中出现的异常。
-            }
-        }
-        $this->parallel->clear();
         $this->messages = [];
     }
 
