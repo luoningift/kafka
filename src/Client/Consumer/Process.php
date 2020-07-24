@@ -183,7 +183,7 @@ class Process extends BaseProcess
     public function createCoroutineConsumer() {
 
         go(function() {
-            $consumerNumbers = $this->bufferNumber;
+            $consumerNumbers = intval($this->bufferNumber * 1.5);
             $concurrent = new Concurrent($consumerNumbers);
             while(true) {
                 $concurrent->create(function () {
