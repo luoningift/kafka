@@ -63,6 +63,8 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
     //控制是否消费消息
     protected $isConsume = true;
 
+    protected $bufferNumber = 10;
+
     public function __construct()
     {
 
@@ -222,6 +224,17 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
     public function getConsumeControl() {
 
         return $this->isConsume;
+    }
+
+    public function setBufferNumber(int $bufferNumber)
+    {
+        $this->bufferNumber = $bufferNumber;
+        return $this;
+    }
+
+    public function getBufferNumber()
+    {
+        return $this->bufferNumber;
     }
 
     public function init()

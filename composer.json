@@ -1,7 +1,7 @@
 {
   "name": "hky/hyperf-kafka-client",
   "type": "library",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "kafka client",
   "keywords": [
     "kafka"
@@ -13,7 +13,8 @@
     }
   ],
   "require": {
-    "php": ">=7.1.0"
+    "php": ">=7.1.0",
+    "hyperf/logger": "v1.1.26"
   },
   "autoload": {
     "psr-4": {

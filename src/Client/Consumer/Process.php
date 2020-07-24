@@ -9,6 +9,8 @@
 namespace HKY\Kafka\Client\Consumer;
 
 use HKY\Kafka\Message\ConsumerMessageInterface;
+use Hyperf\Utils\ApplicationContext;
+use Hyperf\Utils\Coroutine\Concurrent;
 use Hyperf\Utils\Exception\ParallelExecutionException;
 use Hyperf\Utils\Parallel;
 use Swoole\Coroutine;
@@ -63,16 +65,22 @@ class Process extends BaseProcess
     private $enableListen = false;
 
     /**
-     * @var Parallel
+     * @var Coroutine\Channel
      */
-    private $parallel;
+    private $buffer;
 
     private $maxPollRecord = 5;
 
+    private $bufferNumber = 5;
+
+    private $logger;
+
     public function __construct(ConsumerConfig $config)
     {
-        $this->parallel = new Parallel(5);
         $this->maxPollRecord = $config->getMaxPollRecord();
+        $this->bufferNumber = $config->getBufferNumber();
+        $this->buffer = new Coroutine\Channel($this->bufferNumber);
+        $this->logger = ApplicationContext::getContainer()->get(\Hyperf\Logger\LoggerFactory::class)->get('kafka');
         parent::__construct($config);
     }
 
@@ -97,6 +105,114 @@ class Process extends BaseProcess
         $broker->close();
     }
 
+    private function leaveGroup($consumerMessage)
+    {
+
+        //离开组
+        if ($consumerMessage->checkAtomic()) {
+            try {
+                $this->getGroup()->leaveGroup();
+            } catch (\Exception $e) {
+            }
+            $this->enableListen = false;
+            return true;
+        }
+        if ($consumerMessage->getSingalExit()) {
+            try {
+                $this->getGroup()->leaveGroup();
+            } catch (\Exception $e) {
+            }
+            $this->enableListen = false;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 加入组和发送心跳
+     * @param $consumerMessage
+     * @throws \Throwable
+     */
+    public function joinHeartbeat($consumerMessage)
+    {
+
+        go(function () use ($consumerMessage) {
+            $concurrent = new Concurrent(1);
+            while (true) {
+                $concurrent->create(function () use ($consumerMessage) {
+                    while (true) {
+                        if (!$this->enableListen) {
+                            break;
+                        }
+                        if ($this->leaveGroup($consumerMessage)) {
+                            break;
+                        }
+                        try {
+                            //加入组
+                            if ($this->getAssignment()->isJoinFuture()) {
+                                $this->syncMeta();
+                                $this->getGroupNodeId();
+                                $this->initiateJoinGroup();
+                            }
+                            $this->heartbeat();
+                            Coroutine::sleep(1);
+                        } catch (\Throwable $throwable) {
+                            $this->logger->error($throwable->getMessage(), ['topic' => $this->topics, 'code' => $throwable->getCode(), 'trace' => $throwable->getTraceAsString(), 'file' => $throwable->getFile(), 'line' => $throwable->getLine()]);
+                            if ($throwable instanceof Exception\ErrorCodeException) {
+                                $this->getAssignment()->setJoinFuture(true);
+                                Coroutine::sleep(0.001);
+                            } else {
+                                throw $throwable;
+                            }
+                        }
+                    }
+                });
+                if (!$this->enableListen) {
+                    break;
+                }
+                if ($this->leaveGroup($consumerMessage)) {
+                    break;
+                }
+            }
+        });
+    }
+
+    /**
+     * 创建消费者
+     */
+    public function createCoroutineConsumer() {
+
+        go(function() {
+            $consumerNumbers = intval($this->bufferNumber * 1.5);
+            $concurrent = new Concurrent($consumerNumbers);
+            while(true) {
+                $concurrent->create(function () {
+                    while (true) {
+                        if (!$this->enableListen) {
+                            break;
+                        }
+                        try {
+                            $message = $this->buffer->pop();
+                            if ($message && is_array($message)) {
+                                $parallel = new Parallel(1);
+                                $parallel->add(function () use ($message) {
+                                    call_user_func_array($this->consumer, $message);
+                                });
+                                $parallel->wait();
+                            }
+                            Coroutine::sleep(0.001);
+                        } catch (\Throwable $throwable) {
+                            $this->logger->error('消费消息：' . $throwable->getMessage(), ['topic' => $this->topics, 'code' => $throwable->getCode(), 'trace' => $throwable->getTraceAsString(), 'file' => $throwable->getFile(), 'line' => $throwable->getLine()]);
+                        }
+                    }
+                });
+                if (!$this->enableListen) {
+                    break;
+                }
+            }
+        });
+    }
+
     /**
      * @param ConsumerMessageInterface $consumerMessage
      * @param float $breakTime
@@ -105,96 +221,71 @@ class Process extends BaseProcess
      */
     public function subscribe(ConsumerMessageInterface $consumerMessage, $breakTime = 0.01, $maxCurrency = 128)
     {
-
         // 注册消费回调
         $this->consumer = [$consumerMessage, 'atomicMessage'];
-
         $this->enableListen = true;
-        $running = 0;
 
         $defaultSleepTime = $this->getConfig()->getRefreshIntervalMs() / 1000;
+        // 计入组和定时发送心跳
+        $this->joinHeartbeat($consumerMessage);
+        $this->createCoroutineConsumer();
 
         while ($this->enableListen) {
-
-            if ($consumerMessage->checkAtomic()) {
-                try {
-                    $this->getGroup()->leaveGroup();
-                } catch (\Exception $e) {
-                }
+            if ($this->leaveGroup($consumerMessage)) {
                 $this->enableListen = false;
                 break;
-            }
-
-            if ($consumerMessage->getSingalExit()) {
-                try {
-                    $this->getGroup()->leaveGroup();
-                } catch (\Exception $e) {
-                }
-                $this->enableListen = false;
-                break;
-            }
-
-            if ($running >= $maxCurrency) {
-                Coroutine::sleep($breakTime);
-                continue;
             }
             try {
-                ++$running;
-                if ($this->getAssignment()->isJoinFuture()) {
-                    $this->syncMeta();
-
-                    $this->getGroupNodeId();
-
-                    $this->initiateJoinGroup();
+                //等待加入组
+                while ($this->getAssignment()->isJoinFuture()) {
+                    Coroutine::sleep(0.04);
                 }
-
-                $this->heartbeat();
-
-                //control is consume
-                if ($consumerMessage->getConsumeControl()) {
-                    //根据时间获取配置文件
-                    $timeConsumerConfig = $consumerMessage->getFrequency();
-                    $sleepTime = 0;
-                    if (is_array($timeConsumerConfig)
-                        && count($timeConsumerConfig) == 2
-                        && is_integer($timeConsumerConfig[0])
-                        && is_integer($timeConsumerConfig[1])
-                        && $timeConsumerConfig[1] <= 1000
-                    ) {
-                        $this->maxPollRecord = $timeConsumerConfig[0];
-                        $sleepTime = $timeConsumerConfig[1] / 1000;
-                    }
-                    if ($this->maxPollRecord > 0) {
-                        $executeStartTime = microtime(true);
-                        $this->getListOffset();
-                        $this->fetchOffset();
-                        $fetchMessage = $this->fetchMsg();
-                        $this->commit();
-                        if ($fetchMessage) {
-                            $sleepTime = $sleepTime - number_format(microtime(true) - $executeStartTime, 3, '.', '');
-                            if ($sleepTime >= 0.001) {
-                                Coroutine::sleep($sleepTime);
-                            }
-                        } else {
-                            Coroutine::sleep($defaultSleepTime);
-                        }
-                    } else {
-                        //不拉取消息 默认休眠一秒
-                        Coroutine::sleep($defaultSleepTime);
-                    }
-                } else {
-                    //开关控制不消费 默认休眠一秒
+                //休眠
+                if (!$consumerMessage->getConsumeControl()) {
                     Coroutine::sleep($defaultSleepTime);
+                    continue;
                 }
-            } catch (Exception\ErrorCodeException $codeException) {
-                $this->getAssignment()->setJoinFuture(true);
-//                echo '----------------group 成员 或者 partition数量变更 需要重新入组与分配partition'.PHP_EOL;
+                //根据配置获取执行频率
+                $timeConsumerConfig = $consumerMessage->getFrequency();
+                $sleepTime = 0;
+                if (is_array($timeConsumerConfig)
+                    && count($timeConsumerConfig) == 2
+                    && is_integer($timeConsumerConfig[0])
+                    && is_integer($timeConsumerConfig[1])
+                    && $timeConsumerConfig[1] <= 1000
+                ) {
+                    $this->maxPollRecord = $timeConsumerConfig[0];
+                    $sleepTime = $timeConsumerConfig[1] / 1000;
+                }
+                //配置拉取到的消息为0 默认休眠1秒
+                if ($this->maxPollRecord <= 0) {
+                    Coroutine::sleep($defaultSleepTime);
+                    continue;
+                }
+                $executeStartTime = microtime(true);
+                $this->getListOffset();
+                $this->fetchOffset();
+                $fetchMessage = $this->fetchMsg();
+                $this->commit();
+                //默认休眠0.001秒
+                Coroutine::sleep($fetchMessage ? $this->getSleepTime($executeStartTime, $sleepTime) : $defaultSleepTime);
             } catch (\Throwable $throwable) {
-                throw  $throwable;
-            } finally {
-                --$running;
+                $this->logger->error($throwable->getMessage(), ['topic' => $this->topics, 'code' => $throwable->getCode(), 'trace' => $throwable->getTraceAsString(), 'file' => $throwable->getFile(), 'line' => $throwable->getLine()]);
+                if ($throwable instanceof Exception\ErrorCodeException) {
+                    $this->getAssignment()->setJoinFuture(true);
+                    Coroutine::sleep(0.001);
+                } else {
+                    $this->enableListen = false;
+                    throw $throwable;
+                }
             }
         }
+    }
+
+    private function getSleepTime($executeStartTime, $sleepTime)
+    {
+        $sTime = $sleepTime - number_format(microtime(true) - $executeStartTime, 3, '.', '');
+        return $sTime > 0.001 ? $sTime : 0.001;
     }
 
     /**
@@ -508,7 +599,7 @@ class Process extends BaseProcess
             }
         }
 //        echo '--------------'.$errorCode.'--------'.Protocol::getError($errorCode).PHP_EOL;
-        throw new Exception\ErrorCodeException(Protocol::getError($errorCode));
+        throw new Exception\ErrorCodeException(Protocol::getError($errorCode), $errorCode);
     }
 
     /**
@@ -516,28 +607,13 @@ class Process extends BaseProcess
      */
     private function consumeMessage(): void
     {
-        $pollMessage = [];
         foreach ($this->messages as $topic => $value) {
             foreach ($value as $partition => $messages) {
                 foreach ($messages as $message) {
-                    $pollMessage[] = [$this, $topic, $partition, $message];
+                    $this->buffer->push([$this, $topic, $partition, $message]);
                 }
             }
         }
-        if ($pollMessage && $this->consumer) {
-            foreach ($pollMessage as $oneMessage) {
-                $this->parallel->add(function () use ($oneMessage) {
-                    call_user_func_array($this->consumer, $oneMessage);
-                });
-            }
-            try {
-                $results = $this->parallel->wait();
-            } catch (ParallelExecutionException $e) {
-                // $e->getResults() 获取协程中的返回值。
-                // $e->getThrowables() 获取协程中出现的异常。
-            }
-        }
-        $this->parallel->clear();
         $this->messages = [];
     }
 

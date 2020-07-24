@@ -58,6 +58,7 @@ class ConsumerManager
             property_exists($instance, 'container') && $instance->container = $this->container;
             $annotation->maxConsumption && $instance->setMaxConsumption($annotation->maxConsumption);
             $annotation->maxPollRecord && $instance->setMaxPollRecord($annotation->maxPollRecord);
+            $annotation->bufferNumber && $instance->setBufferNumber(intval($annotation->bufferNumber));
             $nums = $annotation->processNums;
             $process = $this->createProcess($instance);
             $process->nums = (int) $nums;
@@ -117,6 +118,7 @@ class ConsumerManager
                             $config->setTopics([$consumerMessage->getTopic()]);
                             $config->setMaxBytes($consumerMessage->getMaxBytes());
                             $config->setMaxPollRecord($consumerMessage->getMaxPollRecord());
+                            $config->setBufferNumber($consumerMessage->getBufferNumber());
                             $config->setOffsetReset('earliest');
                             $config->setConsumeMode(ConsumerConfig::CONSUME_BEFORE_COMMIT_OFFSET);
                             $kafka = new Client\Consumer($config);

@@ -205,14 +205,16 @@ class Broker
      */
     public function getConnect(string $key, string $type): ?Client
     {
+
+        $cid = \Swoole\Coroutine::getCid();
         // 如果之前连接了，返回之前的连接
-        if (isset($this->{$type}[$key])) {
-            return $this->{$type}[$key];
+        if (isset($this->{$type}[$key][$cid])) {
+            return $this->{$type}[$key][$cid];
         }
-        if (isset($this->brokers[$key])) {
+        if (isset($this->brokers[$key][$cid])) {
             $hostname = $this->brokers[$key];
-            if (isset($this->$type[$hostname])) {
-                return $this->$type[$hostname];
+            if (isset($this->$type[$hostname][$cid])) {
+                return $this->$type[$hostname][$cid];
             }
         }
         $host = null;
@@ -234,7 +236,7 @@ class Broker
         try {
             $client = $this->getClient((string)$host, (int)$port);
             if ($client->connect()) {
-                $this->{$type}[$key] = $client;
+                $this->{$type}[$key][$cid] = $client;
                 return $client;
             }
         } catch (\Throwable $exception) {

@@ -68,4 +68,9 @@ class Consumer extends AbstractAnnotation
      * @var int
      */
     public $maxPollRecord = 5;
+
+    /**
+     * @var int
+     */
+    public $bufferNumber = 10;
 }
