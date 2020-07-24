@@ -168,6 +168,7 @@ class StudyProgressNormalProcess extends ConsumerMessage
 ```
 ### 版本改动:
 ```$xslt
+v1.0.4   解决消费时间过长 提交偏移量失败的问题
 v1.0.3   增加控制消费频率，控制队列是否消费开关，增加consumer注解最大拉取条数
 v1.0.2   文档说明修改，逻辑修改
 v1.0.1   逻辑修改
