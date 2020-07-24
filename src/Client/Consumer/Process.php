@@ -192,7 +192,7 @@ class Process extends BaseProcess
                             break;
                         }
                         try {
-                            $message = $this->buffer->pop(0.5);
+                            $message = $this->buffer->pop();
                             if ($message && is_array($message)) {
                                 $parallel = new Parallel(1);
                                 $parallel->add(function () use ($message) {
