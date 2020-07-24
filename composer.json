@@ -13,7 +13,8 @@
     }
   ],
   "require": {
-    "php": ">=7.1.0"
+    "php": ">=7.1.0",
+    "hyperf/logger": "v1.1.26"
   },
   "autoload": {
     "psr-4": {
