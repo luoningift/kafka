@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace HKY\Kafka\Message;
 
+use HKY\Kafka\Atomic\VariableAtomic;
 use HKY\Kafka\Client\Consumer\Process;
 use HKY\Kafka\Client\Exception\Exception;
 use HKY\Kafka\Frequency\FrequencyInterface;
@@ -45,7 +46,7 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
     protected $group = '';
 
     /**
-     * @var Swoole\Atomic
+     * @var VariableAtomic
      */
     protected $atomic;
 
@@ -64,11 +65,6 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
     protected $isConsume = true;
 
     protected $bufferNumber = 10;
-
-    public function __construct()
-    {
-
-    }
 
     public function setMaxBytes(int $maxBytes)
     {
@@ -95,7 +91,7 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
     public function initAtomic()
     {
         if (!$this->atomic) {
-            $this->atomic = new Swoole\Atomic();
+            $this->atomic = new VariableAtomic();
         }
         $this->atomic->set(0);
     }

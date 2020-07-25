@@ -45,11 +45,6 @@ class Consumer extends AbstractAnnotation
     public $name = 'KafkaConsumer';
 
     /**
-     * @var int
-     */
-    public $processNums = 1;
-
-    /**
      * @var null|bool
      */
     public $enable;

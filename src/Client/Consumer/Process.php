@@ -35,8 +35,6 @@ class Process extends BaseProcess
 
     protected $topics;
 
-    protected $brokers;
-
     /**
      * @var Client\SyncMeta\Process
      */
@@ -107,8 +105,6 @@ class Process extends BaseProcess
 
     private function leaveGroup($consumerMessage)
     {
-
-        //离开组
         if ($consumerMessage->checkAtomic()) {
             try {
                 $this->getGroup()->leaveGroup();
@@ -136,81 +132,62 @@ class Process extends BaseProcess
     public function joinHeartbeat($consumerMessage)
     {
 
-        go(function () use ($consumerMessage) {
-            $concurrent = new Concurrent(1);
-            while (true) {
-                $concurrent->create(function () use ($consumerMessage) {
-                    while (true) {
-                        if (!$this->enableListen) {
-                            break;
+        $concurrent = new Concurrent(1);
+        while ($this->enableListen) {
+            $concurrent->create(function () use ($consumerMessage) {
+                while ($this->enableListen) {
+                    if ($this->leaveGroup($consumerMessage)) {
+                        continue;
+                    }
+                    try {
+                        //加入组
+                        if ($this->getAssignment()->isJoinFuture()) {
+                            $this->syncMeta();
+                            $this->getGroupNodeId();
+                            $this->initiateJoinGroup();
                         }
-                        if ($this->leaveGroup($consumerMessage)) {
-                            break;
-                        }
-                        try {
-                            //加入组
-                            if ($this->getAssignment()->isJoinFuture()) {
-                                $this->syncMeta();
-                                $this->getGroupNodeId();
-                                $this->initiateJoinGroup();
-                            }
-                            $this->heartbeat();
-                            Coroutine::sleep(1);
-                        } catch (\Throwable $throwable) {
-                            $this->logger->error($throwable->getMessage(), ['topic' => $this->topics, 'code' => $throwable->getCode(), 'trace' => $throwable->getTraceAsString(), 'file' => $throwable->getFile(), 'line' => $throwable->getLine()]);
-                            if ($throwable instanceof Exception\ErrorCodeException) {
-                                $this->getAssignment()->setJoinFuture(true);
-                                Coroutine::sleep(0.001);
-                            } else {
-                                throw $throwable;
-                            }
+                        $this->heartbeat();
+                        Coroutine::sleep(1);
+                    } catch (\Throwable $throwable) {
+                        $this->logger->error($throwable->getMessage(), ['topic' => $this->topics, 'code' => $throwable->getCode(), 'trace' => $throwable->getTraceAsString(), 'file' => $throwable->getFile(), 'line' => $throwable->getLine()]);
+                        if ($throwable instanceof Exception\ErrorCodeException) {
+                            $this->getAssignment()->setJoinFuture(true);
+                            Coroutine::sleep(0.001);
+                        } else {
+                            throw $throwable;
                         }
                     }
-                });
-                if (!$this->enableListen) {
-                    break;
                 }
-                if ($this->leaveGroup($consumerMessage)) {
-                    break;
-                }
-            }
-        });
+            });
+        }
     }
 
     /**
      * 创建消费者
      */
-    public function createCoroutineConsumer() {
+    public function createCoroutineConsumer()
+    {
 
-        go(function() {
-            $consumerNumbers = intval($this->bufferNumber * 1.5);
-            $concurrent = new Concurrent($consumerNumbers);
-            while(true) {
-                $concurrent->create(function () {
-                    while (true) {
-                        if (!$this->enableListen) {
-                            break;
-                        }
-                        try {
-                            $message = $this->buffer->pop();
-                            if ($message && is_array($message)) {
-                                $parallel = new Parallel(1);
-                                $parallel->add(function () use ($message) {
-                                    call_user_func_array($this->consumer, $message);
-                                });
-                                $parallel->wait();
-                            }
-                            Coroutine::sleep(0.001);
-                        } catch (\Throwable $throwable) {
-                            $this->logger->error('消费消息：' . $throwable->getMessage(), ['topic' => $this->topics, 'code' => $throwable->getCode(), 'trace' => $throwable->getTraceAsString(), 'file' => $throwable->getFile(), 'line' => $throwable->getLine()]);
-                        }
+        $consumerNumbers = intval($this->bufferNumber * 1.5);
+        $concurrent = new Concurrent($consumerNumbers);
+        while ($this->enableListen) {
+            $concurrent->create(function () {
+                while ($this->enableListen) {
+                    try {
+                        $message = $this->buffer->pop();
+                        $parallel = new Parallel(1);
+                        $parallel->add(function () use ($message) {
+                            call_user_func_array($this->consumer, $message);
+                        });
+                        $parallel->wait();
+                        Coroutine::sleep(0.001);
+                    } catch (\Throwable $throwable) {
+                        $this->logger->error('消费消息：' . $throwable->getMessage(), ['topic' => $this->topics, 'message' => isset($message) ? $message : [], 'code' => $throwable->getCode(), 'trace' => $throwable->getTraceAsString(), 'file' => $throwable->getFile(), 'line' => $throwable->getLine()]);
+                        Coroutine::sleep(0.001);
                     }
-                });
-                if (!$this->enableListen) {
-                    break;
                 }
-            }
-        });
+            });
+        }
     }
 
     /**
@@ -232,8 +209,7 @@ class Process extends BaseProcess
 
         while ($this->enableListen) {
             if ($this->leaveGroup($consumerMessage)) {
-                $this->enableListen = false;
-                break;
+                continue;
             }
             try {
                 //等待加入组
@@ -265,12 +241,16 @@ class Process extends BaseProcess
                 $executeStartTime = microtime(true);
                 $this->getListOffset();
                 $this->fetchOffset();
-                $fetchMessage = $this->fetchMsg();
+                $isFetchMessage = $this->fetchMsg();
                 $this->commit();
                 //默认休眠0.001秒
-                Coroutine::sleep($fetchMessage ? $this->getSleepTime($executeStartTime, $sleepTime) : $defaultSleepTime);
+                Coroutine::sleep($isFetchMessage ? $this->getSleepTime($executeStartTime, $sleepTime) : $defaultSleepTime);
             } catch (\Throwable $throwable) {
-                $this->logger->error($throwable->getMessage(), ['topic' => $this->topics, 'code' => $throwable->getCode(), 'trace' => $throwable->getTraceAsString(), 'file' => $throwable->getFile(), 'line' => $throwable->getLine()]);
+                if ($throwable instanceof Exception\ConnectionException) {
+                    Coroutine::sleep(10);
+                } else {
+                    $this->logger->error($throwable->getMessage(), ['topic' => $this->topics, 'code' => $throwable->getCode(), 'trace' => $throwable->getTraceAsString(), 'file' => $throwable->getFile(), 'line' => $throwable->getLine()]);
+                }
                 if ($throwable instanceof Exception\ErrorCodeException) {
                     $this->getAssignment()->setJoinFuture(true);
                     Coroutine::sleep(0.001);
@@ -344,7 +324,7 @@ class Process extends BaseProcess
         $this->getAssignment()->setLeaderId($result['leaderId']);
         $this->getAssignment()->assign($result['members'], $this->getBroker());
 
-        return $result['leaderId'] == $result['memberId'] ? true : false;
+        return $result['leaderId'] == $result['memberId'];
     }
 
     /**
@@ -460,23 +440,22 @@ class Process extends BaseProcess
                 }
             }
             $this->getAssignment()->setConsumerOffsets($consumerOffsets);
-            //$this->getAssignment()->setCommitOffsets($this->getAssignment()->getFetchOffsets());
         }
     }
 
     /**
-     * @return array
+     * @return boolean
      * @throws Exception\ConnectionException
      * @throws Exception\ErrorCodeException
      * @throws Exception\Exception
      */
     public function fetchMsg()
     {
-        $results = $this->getFetch()->fetch($this->getAssignment()->getConsumerOffsets());
+        $results = $this->getFetch()->fetch($this->getAssignment()->getConsumerOffsets(), $this->maxPollRecord);
         if (!isset($results['topics'])) {
             return [];
         }
-        $fetchMessage = [];
+        $isFetchMessage = false;
         $hasFetchMessageCount = 0;
         shuffle($results['topics']);
         foreach ($results['topics'] as $topic) {
@@ -498,7 +477,7 @@ class Process extends BaseProcess
                         if ($hasFetchMessageCount == $this->maxPollRecord) {
                             break;
                         }
-                        array_push($fetchMessage, $message);
+                        $isFetchMessage = true;
                         $this->messages[$topic['topicName']][$part['partition']][] = $message;
                         $offset = $message['offset'];// 当前消息的偏移量
                         $this->getAssignment()->setCommitOffset($topic['topicName'], $part['partition'], $offset);
@@ -516,7 +495,7 @@ class Process extends BaseProcess
                 }
             }
         }
-        return $fetchMessage;
+        return $isFetchMessage;
     }
 
     /**
@@ -530,10 +509,9 @@ class Process extends BaseProcess
         if ($this->getConfig()->getConsumeMode() === $this->getConfig()::CONSUME_BEFORE_COMMIT_OFFSET) {
             $this->consumeMessage();
         }
-
         $commitOffset = $this->getAssignment()->getCommitOffsets();
         if (!empty($commitOffset)) {
-//            echo '--------------有消费需要提交'.PHP_EOL;
+
             $results = $this->getOffset()->commit($commitOffset);
             foreach ($results as $topic) {
                 foreach ($topic['partitions'] as $part) {
@@ -543,8 +521,6 @@ class Process extends BaseProcess
                 }
             }
             $this->getAssignment()->setCommitOffsets([]);
-
-            // 先提交，再消费。默认此项
             if ($this->getConfig()->getConsumeMode() === $this->getConfig()::CONSUME_AFTER_COMMIT_OFFSET) {
                 $this->consumeMessage();
             }
@@ -598,7 +574,6 @@ class Process extends BaseProcess
                 $this->getAssignment()->setConsumerOffset($topic, (int)$partId, $offsets[$topic][$partId]);
             }
         }
-//        echo '--------------'.$errorCode.'--------'.Protocol::getError($errorCode).PHP_EOL;
         throw new Exception\ErrorCodeException(Protocol::getError($errorCode), $errorCode);
     }
 

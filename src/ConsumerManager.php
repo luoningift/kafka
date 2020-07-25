@@ -9,7 +9,9 @@ declare(strict_types=1);
  * @contact  group@hyperf.io
  * @license  https://github.com/hyperf/hyperf/blob/master/LICENSE
  */
-namespace HKY\Kafka;;
+
+namespace HKY\Kafka;
+;
 
 use HKY\Kafka\Annotation\Consumer as ConsumerAnnotation;
 use HKY\Kafka\Client\Config\ConsumerConfig;
@@ -18,10 +20,6 @@ use Hyperf\Contract\ConfigInterface;
 use Hyperf\Di\Annotation\AnnotationCollector;
 use Hyperf\Process\AbstractProcess;
 use Hyperf\Process\ProcessManager;
-use Hyperf\Utils\Coroutine;
-use Hyperf\Utils\Coroutine\Concurrent;
-use Hyperf\Utils\Exception\ParallelExecutionException;
-use Hyperf\Utils\Parallel;
 use Psr\Container\ContainerInterface;
 use Swoole\Process;
 
@@ -46,7 +44,7 @@ class ConsumerManager
          */
         foreach ($classes as $class => $annotation) {
             $instance = make($class);
-            if (! $instance instanceof ConsumerMessageInterface) {
+            if (!$instance instanceof ConsumerMessageInterface) {
                 continue;
             }
             $annotation->consumerNums && $instance->setConsumerNums($annotation->consumerNums);
@@ -54,14 +52,14 @@ class ConsumerManager
             $annotation->maxByte && $instance->setMaxBytes(intval($annotation->maxByte));
             $annotation->topic && $instance->setTopic($annotation->topic);
             $annotation->group && $instance->setGroup($annotation->group);
-            ! is_null($annotation->enable) && $instance->setEnable($annotation->enable);
+            !is_null($annotation->enable) && $instance->setEnable($annotation->enable);
             property_exists($instance, 'container') && $instance->container = $this->container;
             $annotation->maxConsumption && $instance->setMaxConsumption($annotation->maxConsumption);
             $annotation->maxPollRecord && $instance->setMaxPollRecord($annotation->maxPollRecord);
             $annotation->bufferNumber && $instance->setBufferNumber(intval($annotation->bufferNumber));
-            $nums = $annotation->processNums;
+            $nums = $instance->getConsumerNums();
             $process = $this->createProcess($instance);
-            $process->nums = (int) $nums;
+            $process->nums = (int)$nums;
             $process->name = $annotation->name . '-' . $instance->getTopic();
             ProcessManager::register($process);
         }
@@ -88,49 +86,34 @@ class ConsumerManager
                 $consumerMessage = $this->consumerMessage;
                 $consumerMessage->init();
                 $consumerMessage->initAtomic();
-
                 Process::signal(SIGINT, function () use ($consumerMessage) {
                     $consumerMessage->setSingalExit();
                 });
-
                 Process::signal(SIGTERM, function () use ($consumerMessage) {
                     $consumerMessage->setSingalExit();
                 });
-
-                $concurrent = new Concurrent($this->consumerMessage->getConsumerNums());
-                while(true) {
-                    if ($consumerMessage->checkAtomic()) {
-                        $this->process->exit(0);
+                $kafka = null;
+                $config = null;
+                try {
+                    $kafkaConfig = $this->container->get(ConfigInterface::class)->get('hky_kafka.consumer.' . $consumerMessage->getPoolName());
+                    $config = new ConsumerConfig();
+                    $config->setRefreshIntervalMs(1000);
+                    $config->setMetadataBrokerList($kafkaConfig['broker_list'] ?? '127.0.0.1:9092,127.0.0.1:9093');
+                    $config->setBrokerVersion($kafkaConfig['version'] ?? '0.9.0');
+                    $config->setGroupId($consumerMessage->getGroup());
+                    $config->setTopics([$consumerMessage->getTopic()]);
+                    $config->setMaxBytes($consumerMessage->getMaxBytes());
+                    $config->setMaxPollRecord($consumerMessage->getMaxPollRecord());
+                    $config->setBufferNumber($consumerMessage->getBufferNumber());
+                    $config->setOffsetReset('earliest');
+                    $config->setConsumeMode(ConsumerConfig::CONSUME_AFTER_COMMIT_OFFSET);
+                    $kafka = new Client\Consumer($config);
+                    $kafka->subscribe($consumerMessage);
+                } catch (\Exception $e) {
+                    if ($kafka) {
+                        $kafka->close();
+                        unset($kafka);
                     }
-                    if ($consumerMessage->getSingalExit()) {
-                        $this->process->exit(0);
-                    }
-                    $concurrent->create(function () use ($consumerMessage) {
-                        $kafka = null;
-                        $config = null;
-                        try {
-                            $kafkaConfig = $this->container->get(ConfigInterface::class)->get('hky_kafka.consumer.' . $consumerMessage->getPoolName());
-                            $config = new ConsumerConfig();
-                            $config->setRefreshIntervalMs(1000);
-                            $config->setMetadataBrokerList($kafkaConfig['broker_list'] ?? '127.0.0.1:9092,127.0.0.1:9093');
-                            $config->setBrokerVersion($kafkaConfig['version'] ?? '0.9.0');
-                            $config->setGroupId($consumerMessage->getGroup());
-                            $config->setTopics([$consumerMessage->getTopic()]);
-                            $config->setMaxBytes($consumerMessage->getMaxBytes());
-                            $config->setMaxPollRecord($consumerMessage->getMaxPollRecord());
-                            $config->setBufferNumber($consumerMessage->getBufferNumber());
-                            $config->setOffsetReset('earliest');
-                            $config->setConsumeMode(ConsumerConfig::CONSUME_BEFORE_COMMIT_OFFSET);
-                            $kafka = new Client\Consumer($config);
-                            $kafka->subscribe($consumerMessage);
-                        } catch (\Exception $e) {
-                            if ($kafka) {
-                                $kafka->close();
-                                unset($kafka);
-                            }
-                        }
-                        return Coroutine::id();
-                    });
                 }
             }
 
