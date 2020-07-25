@@ -14,11 +14,8 @@ namespace HKY\Kafka\Message;
 
 use HKY\Kafka\Atomic\VariableAtomic;
 use HKY\Kafka\Client\Consumer\Process;
-use HKY\Kafka\Client\Exception\Exception;
 use HKY\Kafka\Frequency\FrequencyInterface;
-use Hyperf\Utils\ApplicationContext;
 use Psr\Container\ContainerInterface;
-use Swoole;
 
 abstract class ConsumerMessage implements ConsumerMessageInterface
 {

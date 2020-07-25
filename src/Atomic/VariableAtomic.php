@@ -11,9 +11,6 @@ declare(strict_types=1);
 
 namespace HKY\Kafka\Atomic;
 
-use Swoole\Coroutine\Channel as CoChannel;
-
-
 class VariableAtomic
 {
     private $atomic = 0;
