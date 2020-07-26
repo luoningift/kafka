@@ -15,7 +15,6 @@ use HKY\Kafka\Client\Exception;
  * @method int getRebalanceTimeout()
  * @method string getOffsetReset()
  * @method int getMaxBytes()
- * @method int getMaxPollRecord()
  * @method int getMinBytes()
  * @method int getMaxWaitTime()
  * @method array getOffsets()
@@ -23,7 +22,6 @@ use HKY\Kafka\Client\Exception;
  * @method int getSpecifyPartition()
  * @method array getTopics()
  * @method bool getConsumeStatus()
- * @method int getBufferNumber()
  */
 class ConsumerConfig extends Config
 {
@@ -99,31 +97,6 @@ class ConsumerConfig extends Config
         }
 
         $this->options['sessionTimeout'] = $sessionTimeout;
-    }
-
-    /**
-     * @param int $maxPollRecord
-     * @throws Exception\Config
-     */
-    public function setMaxPollRecord(int $maxPollRecord): void
-    {
-        if ($maxPollRecord < 1 || $maxPollRecord > 3000) {
-            throw new Exception\Config('Set maxPollRecord value is invalid, must set it 1 .. 3000');
-        }
-
-        $this->options['maxPollRecord'] = $maxPollRecord;
-    }
-
-    /**
-     * @param int $bufferNumber
-     * @throws Exception\Config
-     */
-    public function setBufferNumber(int $bufferNumber): void
-    {
-        if ($bufferNumber < 1 || $bufferNumber > 3000) {
-            throw new Exception\Config('Set bufferNumber value is invalid, must set it 1 .. 3000');
-        }
-        $this->options['bufferNumber'] = $bufferNumber;
     }
 
     /**

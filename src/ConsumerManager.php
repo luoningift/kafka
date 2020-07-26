@@ -11,7 +11,6 @@ declare(strict_types=1);
  */
 
 namespace HKY\Kafka;
-;
 
 use HKY\Kafka\Annotation\Consumer as ConsumerAnnotation;
 use HKY\Kafka\Client\Config\ConsumerConfig;
@@ -55,8 +54,6 @@ class ConsumerManager
             !is_null($annotation->enable) && $instance->setEnable($annotation->enable);
             property_exists($instance, 'container') && $instance->container = $this->container;
             $annotation->maxConsumption && $instance->setMaxConsumption($annotation->maxConsumption);
-            $annotation->maxPollRecord && $instance->setMaxPollRecord($annotation->maxPollRecord);
-            $annotation->bufferNumber && $instance->setBufferNumber(intval($annotation->bufferNumber));
             $nums = $instance->getConsumerNums();
             $process = $this->createProcess($instance);
             $process->nums = (int)$nums;
@@ -86,12 +83,15 @@ class ConsumerManager
                 $consumerMessage = $this->consumerMessage;
                 $consumerMessage->init();
                 $consumerMessage->initAtomic();
+                
                 Process::signal(SIGINT, function () use ($consumerMessage) {
                     $consumerMessage->setSingalExit();
                 });
+                
                 Process::signal(SIGTERM, function () use ($consumerMessage) {
                     $consumerMessage->setSingalExit();
                 });
+                
                 $kafka = null;
                 $config = null;
                 try {
@@ -103,8 +103,6 @@ class ConsumerManager
                     $config->setGroupId($consumerMessage->getGroup());
                     $config->setTopics([$consumerMessage->getTopic()]);
                     $config->setMaxBytes($consumerMessage->getMaxBytes());
-                    $config->setMaxPollRecord($consumerMessage->getMaxPollRecord());
-                    $config->setBufferNumber($consumerMessage->getBufferNumber());
                     $config->setOffsetReset('earliest');
                     $config->setConsumeMode(ConsumerConfig::CONSUME_AFTER_COMMIT_OFFSET);
                     $kafka = new Client\Consumer($config);

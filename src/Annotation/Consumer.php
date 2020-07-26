@@ -52,20 +52,10 @@ class Consumer extends AbstractAnnotation
     /**
      * @var int
      */
-    public $maxConsumption = 0;
+    public $maxConsumption = -1;
 
     /**
      * @var int
      */
     public $maxByte = 65535;
-
-    /**
-     * @var int
-     */
-    public $maxPollRecord = 5;
-
-    /**
-     * @var int
-     */
-    public $bufferNumber = 10;
 }

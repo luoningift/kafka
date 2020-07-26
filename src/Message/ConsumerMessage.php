@@ -53,11 +53,6 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
 
     protected $maxPollRecord = 5;
 
-    /**
-     * @var FrequencyInterface
-     */
-    protected $frequency;
-
     //控制是否消费消息
     protected $isConsume = true;
 
@@ -188,20 +183,6 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
         return $this;
     }
 
-    public function setFrequency(FrequencyInterface $frequency)
-    {
-        $this->frequency = $frequency;
-    }
-
-    public function getFrequency(): array
-    {
-        if ($this->frequency instanceof FrequencyInterface) {
-            $rate = $this->frequency->get();
-            return count($rate) == 2 && is_integer($rate[0]) && is_integer($rate[1]) && $rate[1] <= 1000 ? $rate : [];
-        }
-        return [];
-    }
-
     public function setOffConsume()
     {
         $this->isConsume = false;
@@ -217,17 +198,6 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
     public function getConsumeControl() {
 
         return $this->isConsume;
-    }
-
-    public function setBufferNumber(int $bufferNumber)
-    {
-        $this->bufferNumber = $bufferNumber;
-        return $this;
-    }
-
-    public function getBufferNumber()
-    {
-        return $this->bufferNumber;
     }
 
     public function init()

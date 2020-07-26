@@ -28,7 +28,7 @@ class Process extends BaseProcess
      */
     public function handShake()
     {
-        $connect = $this->getBroker()->getMetaConnect($this->getBroker()->getGroupBrokerId());
+        $connect = $this->getBroker()->getMetaConnectByBrokerId($this->getBroker()->getGroupBrokerId());
 
         if ($connect === null) {
             throw new ConnectionException();

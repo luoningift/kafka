@@ -38,7 +38,7 @@ class Process extends BaseProcess
      */
     public function listOffset(): array
     {
-        $assignedTopics     = $this->getAssignment()->getTopics();
+        $assignedTopics = $this->getAssignment()->getTopics();
         $topicList  = $this->getConfig()->getTopics();
         foreach ($assignedTopics as $nodeId => $topics) {
             $data = [];
@@ -73,7 +73,7 @@ class Process extends BaseProcess
                 'replica_id' => -1,
                 'data'       => $data,
             ];
-            $connect = $this->getBroker()->getMetaConnect($nodeId);
+            $connect = $this->getBroker()->getFetchConnectByBrokerId($nodeId);
             if ($connect === null) {
                 throw new ConnectionException();
             }
@@ -114,7 +114,7 @@ class Process extends BaseProcess
         $topics     = $broker->getTopics();
         $topicList  = $this->getConfig()->getTopics();
 
-        $connect = $broker->getMetaConnect($broker->getGroupBrokerId());
+        $connect = $broker->getFetchConnectByBrokerId($broker->getGroupBrokerId());
 
         if ($connect === null) {
             throw new ConnectionException();
@@ -162,7 +162,7 @@ class Process extends BaseProcess
     public function commit(array $commitOffsets = []): array
     {
         $data = [];
-        $connect = $this->getBroker()->getMetaConnect($this->getBroker()->getGroupBrokerId());
+        $connect = $this->getBroker()->getFetchConnectByBrokerId($this->getBroker()->getGroupBrokerId());
 
         if ($connect === null) {
             throw new ConnectionException();

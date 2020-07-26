@@ -61,19 +61,11 @@ interface ConsumerMessageInterface
 
     public function setMaxConsumption(int $maxConsumption);
 
-    public function setFrequency(FrequencyInterface $frequency);
-
-    public function getFrequency() : array;
-
     public function setOnConsume();
 
     public function setOffConsume();
 
     public function getConsumeControl();
-
-    public function setBufferNumber(int $bufferNumber);
-
-    public function getBufferNumber();
 
     public function init();
 }

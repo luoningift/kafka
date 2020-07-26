@@ -45,7 +45,7 @@ class Process extends BaseProcess
             return [];
         }
         $shuffleTopics = $this->getAssignment()->getTopics();
-        shuffle($shuffleTopics);
+        uksort($shuffleTopics, function ($a, $b) {return mt_rand(-10, 10);});
         $res = [];
         $hasPollRecord = 0;
         foreach ($shuffleTopics as $nodeId => $topics) {
@@ -72,7 +72,7 @@ class Process extends BaseProcess
                 'replica_id'        => -1,
                 'data'              => $data,
             );
-            $connect = $this->getBroker()->getMetaConnect($nodeId);
+            $connect = $this->getBroker()->getFetchConnectByBrokerId($nodeId);
             if ($connect === null) {
                 throw new ConnectionException();
             }

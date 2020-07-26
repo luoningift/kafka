@@ -60,7 +60,7 @@ class Process extends BaseProcess
      */
     public function joinGroup(): array
     {
-        $connect = $this->getBroker()->getMetaConnect($this->getBroker()->getGroupBrokerId());
+        $connect = $this->getBroker()->getMetaConnectByBrokerId($this->getBroker()->getGroupBrokerId());
 
         if ($connect === null) {
             throw new ConnectionException();
@@ -93,7 +93,7 @@ class Process extends BaseProcess
      */
     public function leaveGroup(): array
     {
-        $connect = $this->getBroker()->getMetaConnect($this->getBroker()->getGroupBrokerId());
+        $connect = $this->getBroker()->getMetaConnectByBrokerId($this->getBroker()->getGroupBrokerId());
 
         if ($connect === null) {
             throw new ConnectionException();
@@ -118,7 +118,7 @@ class Process extends BaseProcess
      */
     public function syncGroupOnJoinLeader(): array
     {
-        $connect = $this->getBroker()->getMetaConnect($this->getBroker()->getGroupBrokerId());
+        $connect = $this->getBroker()->getMetaConnectByBrokerId($this->getBroker()->getGroupBrokerId());
 
         if ($connect === null) {
             throw new ConnectionException();
@@ -149,7 +149,7 @@ class Process extends BaseProcess
      */
     public function syncGroupOnJoinFollower(): array
     {
-        $connect = $this->getBroker()->getMetaConnect($this->getBroker()->getGroupBrokerId());
+        $connect = $this->getBroker()->getMetaConnectByBrokerId($this->getBroker()->getGroupBrokerId());
 
         if ($connect === null) {
             throw new ConnectionException();
@@ -178,7 +178,7 @@ class Process extends BaseProcess
      */
     public function describeGroups(): array
     {
-        $connect = $this->getBroker()->getMetaConnect($this->getBroker()->getGroupBrokerId());
+        $connect = $this->getBroker()->getMetaConnectByBrokerId($this->getBroker()->getGroupBrokerId());
 
         if ($connect === null) {
             throw new ConnectionException();
@@ -202,7 +202,7 @@ class Process extends BaseProcess
      */
     public function listGroup(): array
     {
-        $connect = $this->getBroker()->getMetaConnect($this->getBroker()->getGroupBrokerId());
+        $connect = $this->getBroker()->getMetaConnectByBrokerId($this->getBroker()->getGroupBrokerId());
 
         if ($connect === null) {
             throw new ConnectionException();

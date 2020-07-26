@@ -67,17 +67,15 @@ class Process extends BaseProcess
      */
     private $buffer;
 
-    private $maxPollRecord = 5;
-
-    private $bufferNumber = 5;
+    private $maxPollRecord = 1;
 
     private $logger;
+    
+    private $parallel = null;
 
     public function __construct(ConsumerConfig $config)
     {
-        $this->maxPollRecord = $config->getMaxPollRecord();
-        $this->bufferNumber = $config->getBufferNumber();
-        $this->buffer = new Coroutine\Channel($this->bufferNumber);
+        $this->parallel = new Parallel(1);
         $this->logger = ApplicationContext::getContainer()->get(\Hyperf\Logger\LoggerFactory::class)->get('kafka');
         parent::__construct($config);
     }
@@ -108,16 +106,14 @@ class Process extends BaseProcess
         if ($consumerMessage->checkAtomic()) {
             try {
                 $this->getGroup()->leaveGroup();
-            } catch (\Exception $e) {
-            }
+            } catch (\Throwable $e) {}
             $this->enableListen = false;
             return true;
         }
         if ($consumerMessage->getSingalExit()) {
             try {
                 $this->getGroup()->leaveGroup();
-            } catch (\Exception $e) {
-            }
+            } catch (\Throwable $e) {}
             $this->enableListen = false;
             return true;
         }
@@ -131,63 +127,37 @@ class Process extends BaseProcess
      */
     public function joinHeartbeat($consumerMessage)
     {
-
-        $concurrent = new Concurrent(1);
-        while ($this->enableListen) {
-            $concurrent->create(function () use ($consumerMessage) {
-                while ($this->enableListen) {
-                    if ($this->leaveGroup($consumerMessage)) {
-                        continue;
-                    }
-                    try {
-                        //加入组
-                        if ($this->getAssignment()->isJoinFuture()) {
-                            $this->syncMeta();
-                            $this->getGroupNodeId();
-                            $this->initiateJoinGroup();
+        go(function() use ($consumerMessage) {
+            $concurrent = new Concurrent(1);
+            while ($this->enableListen) {
+                $concurrent->create(function () use ($consumerMessage) {
+                    while ($this->enableListen) {
+                        if ($this->leaveGroup($consumerMessage)) {
+                            continue;
                         }
-                        $this->heartbeat();
-                        Coroutine::sleep(1);
-                    } catch (\Throwable $throwable) {
-                        $this->logger->error($throwable->getMessage(), ['topic' => $this->topics, 'code' => $throwable->getCode(), 'trace' => $throwable->getTraceAsString(), 'file' => $throwable->getFile(), 'line' => $throwable->getLine()]);
-                        if ($throwable instanceof Exception\ErrorCodeException) {
+                        try {
+                            //加入组
+                            if ($this->getAssignment()->isJoinFuture()) {
+                                $this->syncMeta();
+                                $this->getGroupNodeId();
+                                $this->initiateJoinGroup();
+                            } else {
+                                $this->heartbeat();
+                            }
+                            Coroutine::sleep(1);
+                        } catch (\Throwable $throwable) {
                             $this->getAssignment()->setJoinFuture(true);
-                            Coroutine::sleep(0.001);
-                        } else {
-                            throw $throwable;
+                            $this->logger->error($throwable->getMessage(), ['topic' => $this->topics, 'code' => $throwable->getCode(), 'trace' => $throwable->getTraceAsString(), 'file' => $throwable->getFile(), 'line' => $throwable->getLine()]);
+                            if ($throwable instanceof Exception\ErrorCodeException) {
+                                Coroutine::sleep(0.001);
+                            } else {
+                                throw $throwable;
+                            }
                         }
                     }
-                }
-            });
-        }
-    }
-
-    /**
-     * 创建消费者
-     */
-    public function createCoroutineConsumer()
-    {
-
-        $consumerNumbers = intval($this->bufferNumber * 1.5);
-        $concurrent = new Concurrent($consumerNumbers);
-        while ($this->enableListen) {
-            $concurrent->create(function () {
-                while ($this->enableListen) {
-                    try {
-                        $message = $this->buffer->pop();
-                        $parallel = new Parallel(1);
-                        $parallel->add(function () use ($message) {
-                            call_user_func_array($this->consumer, $message);
-                        });
-                        $parallel->wait();
-                        Coroutine::sleep(0.001);
-                    } catch (\Throwable $throwable) {
-                        $this->logger->error('消费消息：' . $throwable->getMessage(), ['topic' => $this->topics, 'message' => isset($message) ? $message : [], 'code' => $throwable->getCode(), 'trace' => $throwable->getTraceAsString(), 'file' => $throwable->getFile(), 'line' => $throwable->getLine()]);
-                        Coroutine::sleep(0.001);
-                    }
-                }
-            });
-        }
+                });
+            }    
+        });
     }
 
     /**
@@ -203,15 +173,13 @@ class Process extends BaseProcess
         $this->enableListen = true;
 
         $defaultSleepTime = $this->getConfig()->getRefreshIntervalMs() / 1000;
-        // 计入组和定时发送心跳
+        // 加入组和定时发送心跳
         $this->joinHeartbeat($consumerMessage);
-        $this->createCoroutineConsumer();
-
         while ($this->enableListen) {
-            if ($this->leaveGroup($consumerMessage)) {
-                continue;
-            }
             try {
+                if ($this->leaveGroup($consumerMessage)) {
+                    continue;
+                }
                 //等待加入组
                 while ($this->getAssignment()->isJoinFuture()) {
                     Coroutine::sleep(0.04);
@@ -221,38 +189,19 @@ class Process extends BaseProcess
                     Coroutine::sleep($defaultSleepTime);
                     continue;
                 }
-                //根据配置获取执行频率
-                $timeConsumerConfig = $consumerMessage->getFrequency();
-                $sleepTime = 0;
-                if (is_array($timeConsumerConfig)
-                    && count($timeConsumerConfig) == 2
-                    && is_integer($timeConsumerConfig[0])
-                    && is_integer($timeConsumerConfig[1])
-                    && $timeConsumerConfig[1] <= 1000
-                ) {
-                    $this->maxPollRecord = $timeConsumerConfig[0];
-                    $sleepTime = $timeConsumerConfig[1] / 1000;
-                }
-                //配置拉取到的消息为0 默认休眠1秒
-                if ($this->maxPollRecord <= 0) {
-                    Coroutine::sleep($defaultSleepTime);
-                    continue;
-                }
-                $executeStartTime = microtime(true);
                 $this->getListOffset();
                 $this->fetchOffset();
                 $isFetchMessage = $this->fetchMsg();
                 $this->commit();
-                //默认休眠0.001秒
-                Coroutine::sleep($isFetchMessage ? $this->getSleepTime($executeStartTime, $sleepTime) : $defaultSleepTime);
+                Coroutine::sleep($isFetchMessage ? 0.001 : $defaultSleepTime);
             } catch (\Throwable $throwable) {
+                $this->getAssignment()->setJoinFuture(true);
                 if ($throwable instanceof Exception\ConnectionException) {
                     Coroutine::sleep(10);
                 } else {
                     $this->logger->error($throwable->getMessage(), ['topic' => $this->topics, 'code' => $throwable->getCode(), 'trace' => $throwable->getTraceAsString(), 'file' => $throwable->getFile(), 'line' => $throwable->getLine()]);
                 }
                 if ($throwable instanceof Exception\ErrorCodeException) {
-                    $this->getAssignment()->setJoinFuture(true);
                     Coroutine::sleep(0.001);
                 } else {
                     $this->enableListen = false;
@@ -262,11 +211,6 @@ class Process extends BaseProcess
         }
     }
 
-    private function getSleepTime($executeStartTime, $sleepTime)
-    {
-        $sTime = $sleepTime - number_format(microtime(true) - $executeStartTime, 3, '.', '');
-        return $sTime > 0.001 ? $sTime : 0.001;
-    }
 
     /**
      * @throws Exception\ConnectionException
@@ -362,6 +306,7 @@ class Process extends BaseProcess
         $assign = $this->getAssignment();
         if (!empty($brokerToTopics)) {
             $assign->setTopics($brokerToTopics);
+            $this->heartbeat();
             $assign->setJoinFuture(false);
         }
     }
@@ -451,11 +396,11 @@ class Process extends BaseProcess
      */
     public function fetchMsg()
     {
+        $isFetchMessage = false;
         $results = $this->getFetch()->fetch($this->getAssignment()->getConsumerOffsets(), $this->maxPollRecord);
         if (!isset($results['topics'])) {
-            return [];
+            return $isFetchMessage;
         }
-        $isFetchMessage = false;
         $hasFetchMessageCount = 0;
         shuffle($results['topics']);
         foreach ($results['topics'] as $topic) {
@@ -469,7 +414,7 @@ class Process extends BaseProcess
                 }
                 $offset = $this->getAssignment()->getConsumerOffset($topic['topicName'], $part['partition']);
                 if ($offset === null) {
-                    return [];
+                    return $isFetchMessage;
                 }
                 $innerCount = 0;
                 foreach ($part['messages'] as $message) {
@@ -585,7 +530,11 @@ class Process extends BaseProcess
         foreach ($this->messages as $topic => $value) {
             foreach ($value as $partition => $messages) {
                 foreach ($messages as $message) {
-                    $this->buffer->push([$this, $topic, $partition, $message]);
+                    $this->parallel->add(function () use ($topic, $partition, $message) {
+                        call_user_func_array($this->consumer, [$this, $topic, $partition, $message]);
+                    });
+                    $this->parallel->wait();
+                    $this->parallel->clear();;
                 }
             }
         }
