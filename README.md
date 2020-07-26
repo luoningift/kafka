@@ -97,7 +97,6 @@ declare(strict_types=1);
 namespace App\Process;
 
 use HKY\Kafka\Message\ConsumerMessage;
-use Hyperf\Event\Annotation\Listener;
 use HKY\Kafka\Annotation\Consumer;
 use Hyperf\Utils\Coroutine;
 
@@ -111,17 +110,11 @@ use Hyperf\Utils\Coroutine;
  * name 启动时设置的进程名称
  * group 消费者组
  * maxConsumption 消费多少消息后消费进程重启 不重启 写-1
- * maxPollRecord 每次最多拉取多少条进行消费
  * @Consumer(enable=true, poolName="default", maxByte=65535, maxPollRecord=5, topic="test1", consumerNums=5, maxConsumption=10000, processNums=2, name="study_progress", group="luoningtest")
  */
 class StudyProgressNormalProcess extends ConsumerMessage
 {
     public function init() {
-          $frequency = $this->container->get(TimeFrequency::class);
-          $frequency->set(['000000'=>[1, 1000], '090000'=>[2, 400]]);
-          //设置消费策略处理类 使用container获取单例 策略可以动态修改
-          $this->setFrequency($frequency);
-          
           //启动时设置不消费消息
           $this->setOffConsume();
           //12秒后开始消费消息
@@ -147,11 +140,6 @@ class StudyProgressNormalProcess extends ConsumerMessage
         echo '总共消费了 ' . $this->atomic->get() . ' 条, 进程ID是 '.posix_getpid().' 协程id是 ' . Coroutine::id() . PHP_EOL;
         return 'success';
     }
-    
-    //除自定义策略类以外 可以重写getFrequency方法控制策略
-    public function getFrequency() : array{
-        return [1, 0];
-    }
 }
 //consume方法结果请返回string
 //$this->atomic->get() 获取已经消费的消息数量
@@ -159,15 +147,10 @@ class StudyProgressNormalProcess extends ConsumerMessage
 ##### 6.其他注意事项
 ```$xslt
 1、进程异常重启后, 部分消息会重复消费，原因还未来得及提交offset
-2、设置策略处理类可以自定义类 需实现HKY\Kafka\Frequency\FrequencyInterface接口 实现get方法，返回数据格式如下
-   * @example [1,1] 表示每次拉取一个消息，消费完后休眠1毫秒
-   * @example [1,0] 表示每次拉取一个消息，消费完后休眠0毫秒
-   * @example [0,0] 表示不拉取消息
-   *                休眠时间需小于等于1000 否则不生效
-3、除设置策略处理类外 可以重写ConsumerMessage的getFrequency方法
 ```
 ### 版本改动:
 ```$xslt
+v1.0.5   bug fixed,删除无用代码
 v1.0.4   解决消费时间过长 提交偏移量失败的问题
 v1.0.3   增加控制消费频率，控制队列是否消费开关，增加consumer注解最大拉取条数
 v1.0.2   文档说明修改，逻辑修改
