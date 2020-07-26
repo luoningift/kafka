@@ -11,7 +11,6 @@ namespace HKY\Kafka\Client\Consumer;
 use HKY\Kafka\Message\ConsumerMessageInterface;
 use Hyperf\Utils\ApplicationContext;
 use Hyperf\Utils\Coroutine\Concurrent;
-use Hyperf\Utils\Exception\ParallelExecutionException;
 use Hyperf\Utils\Parallel;
 use Swoole\Coroutine;
 use HKY\Kafka\Client\BaseProcess;
@@ -71,11 +70,8 @@ class Process extends BaseProcess
 
     private $logger;
     
-    private $parallel = null;
-
     public function __construct(ConsumerConfig $config)
     {
-        $this->parallel = new Parallel(1);
         $this->logger = ApplicationContext::getContainer()->get(\Hyperf\Logger\LoggerFactory::class)->get('kafka');
         parent::__construct($config);
     }
@@ -403,6 +399,7 @@ class Process extends BaseProcess
         }
         $hasFetchMessageCount = 0;
         shuffle($results['topics']);
+        $this->messages = [];
         foreach ($results['topics'] as $topic) {
             foreach ($topic['partitions'] as $part) {
                 if ($part['errorCode'] !== 0) {
@@ -530,11 +527,15 @@ class Process extends BaseProcess
         foreach ($this->messages as $topic => $value) {
             foreach ($value as $partition => $messages) {
                 foreach ($messages as $message) {
-                    $this->parallel->add(function () use ($topic, $partition, $message) {
-                        call_user_func_array($this->consumer, [$this, $topic, $partition, $message]);
+                    $parallel = new Parallel(1);
+                    $parallel->add(function() use ($topic, $partition, $message){
+                        try {
+                            call_user_func_array($this->consumer, [$this, $topic, $partition, $message]);
+                        } catch (\Throwable $throwable) {
+                            $this->logger->error('failed message', ['message' => $message, 'topic' => $topic, 'partition' => $partition]);
+                        }
                     });
-                    $this->parallel->wait();
-                    $this->parallel->clear();;
+                    $parallel->wait();
                 }
             }
         }
