@@ -8,10 +8,10 @@
 
 namespace HKY\Kafka\Client;
 
-use HKY\Kafka\Client\Client\ClientInterface;
 use HKY\Kafka\Client\Config\Config;
 use HKY\Kafka\Client\Sasl\Plain;
 use HKY\Kafka\Client\Exception;
+use Roave\BetterReflection\Util\Autoload\ClassPrinter\ClassPrinterInterface;
 
 class Broker
 {
@@ -35,26 +35,8 @@ class Broker
      */
     private $config;
 
-    /**
-     * @var BaseProcess
-     */
-    private $process;
+    private $socketClients = [];
 
-    /**
-     * @return mixed
-     */
-    public function getProcess()
-    {
-        return $this->process;
-    }
-
-    /**
-     * @param mixed $process
-     */
-    public function setProcess($process): void
-    {
-        $this->process = $process;
-    }
 
     /**
      * @return mixed
@@ -81,14 +63,6 @@ class Broker
     }
 
     /**
-     * @return array
-     */
-    public function getBrokers(): array
-    {
-        return $this->brokers;
-    }
-
-    /**
      * @return mixed
      */
     public function getConfig()
@@ -112,165 +86,116 @@ class Broker
      */
     public function setData(array $topics, array $brokersResult): bool
     {
+        
         $brokers = [];
         foreach ($brokersResult as $value) {
             $brokers[$value['nodeId']] = $value['host'] . ':' . $value['port'];
         }
-
         $changed = false;
-
         // brokers发送前后是否改变，并存最新的brokers
         if (serialize($this->brokers) !== serialize($brokers)) {
             $this->brokers = $brokers;
-
             $changed = true;
         }
-
         $newTopics = [];
         foreach ($topics as $topic) {
             if ((int)$topic['errorCode'] !== Protocol::NO_ERROR) {
                 throw new Exception\ErrorCodeException();
                 continue;
             }
-
             $item = [];
-
             foreach ($topic['partitions'] as $part) {
                 $item[$part['partitionId']] = $part['leader'];
             }
-
             $newTopics[$topic['topicName']] = $item;
         }
-
         // topics 发送前后是否改变，并存最新的topics
         if (serialize($this->topics) !== serialize($newTopics)) {
             $this->topics = $newTopics;
-
             $changed = true;
         }
         return $changed;
     }
 
     /**
-     * @param string $key
-     * @return Client|null
+     * @param string $brokerId
+     * @return ClientConnection|null
      * @throws Exception\Exception
      */
-    public function getMetaConnect(string $key): ?Client
+    public function getMetaConnectByBrokerId(string $brokerId): ?ClientConnection
     {
-        return $this->getConnect($key, 'metaClients');
+        return $this->getConnect($brokerId, 'connect');
     }
+
 
     /**
      * @param string $key
-     * @return Client|null
+     * @return ClientConnection|null
      * @throws Exception\Exception
      */
-    public function getDataConnect(string $key): ?Client
+    public function getFetchConnectByBrokerId(string $key): ?ClientConnection
     {
-        return $this->getConnect($key, 'dataClients');
+        return $this->getConnect($key, 'fetchConnect');
     }
 
-
-    public function close()
-    {
-        if (isset($this->metaClients) && is_array($this->metaClients)) {
-            foreach ($this->metaClients as $client) {
-                if ($client instanceof ClientInterface) {
-                    try {
-                        $client->close();
-                    } catch (\Exception $e) {
-                    }
-                }
-            }
-        }
-
-        if (isset($this->dataClients) && is_array($this->dataClients)) {
-            foreach ($this->dataClients as $client) {
-                if ($client instanceof ClientInterface) {
-                    try {
-                        $client->close();
-                    } catch (\Exception $e) {
-                    }
-                }
-            }
-        }
-    }
 
     /**
      * @param string $key
      * @param string $type
-     * @return Client|null
+     * @return ClientConnection|null
      * @throws Exception\Exception
      */
-    public function getConnect(string $key, string $type): ?Client
+    public function getConnect(string $key, string $type): ?ClientConnection
     {
-
-        $cid = \Swoole\Coroutine::getCid();
-        // 如果之前连接了，返回之前的连接
-        if (isset($this->{$type}[$key][$cid])) {
-            return $this->{$type}[$key][$cid];
-        }
-        if (isset($this->brokers[$key][$cid])) {
-            $hostname = $this->brokers[$key];
-            if (isset($this->$type[$hostname][$cid])) {
-                return $this->$type[$hostname][$cid];
-            }
-        }
-        $host = null;
-        $port = null;
-
         if (isset($this->brokers[$key])) {
-            $hostname = $this->brokers[$key];
-
-            [$host, $port] = explode(':', $hostname);
+            $hostPort = $this->brokers[$key];
+        } else {
+            $hostPort = $key;
         }
-
-        if (strpos($key, ':') !== false) {
-            [$host, $port] = explode(':', $key);
+        if (isset($this->socketClients[$type][$hostPort])) {
+            return $this->socketClients[$type][$hostPort];
         }
-
-        if ($host === null || $port === null) {
-            return null;
+        [$host, $port] = explode(':', $hostPort);
+        if (!$host || !$port) {
+            throw new Exception\ConnectionException('host or port is not correct');
         }
         try {
             $client = $this->getClient((string)$host, (int)$port);
             if ($client->connect()) {
-                $this->{$type}[$key][$cid] = $client;
+                $this->socketClients[$type][$hostPort] = $client;
                 return $client;
             }
         } catch (\Throwable $exception) {
-            throw new Exception\Exception($exception);
+            throw new Exception\ConnectionException($exception->getMessage());
         }
-        return null;
+        throw new Exception\ConnectionException($hostPort . ' is not connect failed');
     }
 
     /**
      * @param string $host
      * @param int $port
-     * @return null|\swoole_client
+     * @return ClientConnection
      * @throws Exception\Config
      * @throws Exception\Exception
      */
-    public function getClient(string $host, int $port): ?Client
+    private function getClient(string $host, int $port): ?ClientConnection
     {
         $saslProvider = $this->judgeConnectionConfig();
-        return new Client($host, $port, $this->config);
+        return new ClientConnection($host, $port, $this->config);
     }
 
     /**
-     * @return Client|null
+     * @return ClientConnection|null
      * @throws Exception\Exception
      */
-    public function getRandConnect(): ?Client
+    public function getRandConnect(): ?ClientConnection
     {
         $nodeIds = array_keys($this->brokers);
         shuffle($nodeIds);
         if (!isset($nodeIds[0])) {
             return null;
         }
-
-        return $this->getMetaConnect((string)$nodeIds[0]);
+        return $this->getMetaConnectByBrokerId((string)$nodeIds[0]);
     }
 
     /**
@@ -320,12 +245,23 @@ class Broker
             case Config::SASL_MECHANISMS_PLAIN:
                 return new Plain($username, $password);
                 break;
+            case Config::SASL_MECHANISMS_SCRAM_SHA_512:
             case Config::SASL_MECHANISMS_GSSAPI:
                 break;
-            case Config::SASL_MECHANISMS_SCRAM_SHA_512:
-                break;
         }
-
         throw new Exception\Exception(sprintf('"%s" is an invalid SASL mechnism', $mechanism));
+    }
+
+    public function close()
+    {
+        foreach($this->socketClients as $type => $hostPortsClient) {
+            foreach($hostPortsClient as $client) {
+                if ($client instanceof ClientConnection) {
+                    try {
+                        $client->close();
+                    } catch (\Exception $e) {}
+                }
+            }
+        }
     }
 }

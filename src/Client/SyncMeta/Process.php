@@ -36,7 +36,7 @@ class Process extends BaseProcess
         shuffle($brokerHost);
         $broker = $this->getBroker();
         foreach ($brokerHost as $host) {
-            $client = $broker->getMetaConnect($host);
+            $client = $broker->getMetaConnectByBrokerId($host);
             if (! $client->isConnected()) {
                 continue;
             }

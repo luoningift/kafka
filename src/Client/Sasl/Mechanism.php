@@ -7,23 +7,23 @@
  */
 namespace HKY\Kafka\Client\Sasl;
 
-use HKY\Kafka\Client\Client\ClientInterface;
+use HKY\Kafka\Client\ClientConnection;
 use HKY\Kafka\Client\SaslMechanism;
 
 abstract class Mechanism implements SaslMechanism
 {
-    public function autheticate (ClientInterface $client): void
+    public function autheticate (ClientConnection $client): void
     {
         $this->handShake($client, $this->getName());
         $this->performAuthentication($client);
     }
 
-    protected function handShake(ClientInterface $client, string $mechanism): void
+    protected function handShake(ClientConnection $client, string $mechanism): void
     {
 
     }
 
-    abstract protected function performAuthentication(ClientInterface $client): void;
+    abstract protected function performAuthentication(ClientConnection $client): void;
 
     abstract public function getName(): string;
 

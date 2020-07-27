@@ -12,12 +12,10 @@ declare(strict_types=1);
 
 namespace HKY\Kafka\Message;
 
+use HKY\Kafka\Atomic\VariableAtomic;
 use HKY\Kafka\Client\Consumer\Process;
-use HKY\Kafka\Client\Exception\Exception;
 use HKY\Kafka\Frequency\FrequencyInterface;
-use Hyperf\Utils\ApplicationContext;
 use Psr\Container\ContainerInterface;
-use Swoole;
 
 abstract class ConsumerMessage implements ConsumerMessageInterface
 {
@@ -45,7 +43,7 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
     protected $group = '';
 
     /**
-     * @var Swoole\Atomic
+     * @var VariableAtomic
      */
     protected $atomic;
 
@@ -55,20 +53,10 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
 
     protected $maxPollRecord = 5;
 
-    /**
-     * @var FrequencyInterface
-     */
-    protected $frequency;
-
     //控制是否消费消息
     protected $isConsume = true;
 
     protected $bufferNumber = 10;
-
-    public function __construct()
-    {
-
-    }
 
     public function setMaxBytes(int $maxBytes)
     {
@@ -95,7 +83,7 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
     public function initAtomic()
     {
         if (!$this->atomic) {
-            $this->atomic = new Swoole\Atomic();
+            $this->atomic = new VariableAtomic();
         }
         $this->atomic->set(0);
     }
@@ -195,20 +183,6 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
         return $this;
     }
 
-    public function setFrequency(FrequencyInterface $frequency)
-    {
-        $this->frequency = $frequency;
-    }
-
-    public function getFrequency(): array
-    {
-        if ($this->frequency instanceof FrequencyInterface) {
-            $rate = $this->frequency->get();
-            return count($rate) == 2 && is_integer($rate[0]) && is_integer($rate[1]) && $rate[1] <= 1000 ? $rate : [];
-        }
-        return [];
-    }
-
     public function setOffConsume()
     {
         $this->isConsume = false;
@@ -224,17 +198,6 @@ abstract class ConsumerMessage implements ConsumerMessageInterface
     public function getConsumeControl() {
 
         return $this->isConsume;
-    }
-
-    public function setBufferNumber(int $bufferNumber)
-    {
-        $this->bufferNumber = $bufferNumber;
-        return $this;
-    }
-
-    public function getBufferNumber()
-    {
-        return $this->bufferNumber;
     }
 
     public function init()

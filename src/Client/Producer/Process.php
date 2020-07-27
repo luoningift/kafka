@@ -59,7 +59,7 @@ class Process extends BaseProcess
         $sendData = $this->convertRecordSet($recordSet);
         $result = [];
         foreach ($sendData as $brokerId => $topicList) {
-            $client = $broker->getDataConnect((string)$brokerId);
+            $client = $broker->getMetaConnectByBrokerId((string)$brokerId);
             if ($client === null || !$client->isConnected()) {
                 return [];
             }
