@@ -127,6 +127,7 @@ class Process extends BaseProcess
             $concurrent = new Concurrent(1);
             while ($this->enableListen) {
                 $concurrent->create(function () use ($consumerMessage) {
+                    $this->getBroker()->close();
                     while ($this->enableListen) {
                         try {
                             //加入组
