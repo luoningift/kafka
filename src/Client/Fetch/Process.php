@@ -45,7 +45,7 @@ class Process extends BaseProcess
             return [];
         }
         $shuffleTopics = $this->getAssignment()->getTopics();
-        uksort($shuffleTopics, function ($a, $b) {return mt_rand(-10, 10);});
+        uksort($shuffleTopics, function ($a, $b) {return mt_rand(-1000, 1000);});
         $res = [];
         $hasPollRecord = 0;
         foreach ($shuffleTopics as $nodeId => $topics) {

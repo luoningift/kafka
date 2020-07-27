@@ -128,9 +128,6 @@ class Process extends BaseProcess
             while ($this->enableListen) {
                 $concurrent->create(function () use ($consumerMessage) {
                     while ($this->enableListen) {
-                        if ($this->leaveGroup($consumerMessage)) {
-                            continue;
-                        }
                         try {
                             //加入组
                             if ($this->getAssignment()->isJoinFuture()) {
@@ -139,10 +136,9 @@ class Process extends BaseProcess
                             } else {
                                 $this->heartbeat();
                             }
-                            Coroutine::sleep(1);
                         } catch (\Throwable $throwable) {
                             $this->getAssignment()->setJoinFuture(true);
-                            $this->logger->error($throwable->getMessage(), ['topic' => $this->topics, 'code' => $throwable->getCode(), 'trace' => $throwable->getTraceAsString(), 'file' => $throwable->getFile(), 'line' => $throwable->getLine()]);
+                            $this->logger->error('joinAndHeartbeat:' . $throwable->getMessage(), ['topic' => $this->topics, 'code' => $throwable->getCode(), 'trace' => $throwable->getTraceAsString(), 'file' => $throwable->getFile(), 'line' => $throwable->getLine()]);
                             if ($throwable instanceof Exception\ErrorCodeException) {
                                 Coroutine::sleep(0.001);
                             } else {
@@ -197,6 +193,8 @@ class Process extends BaseProcess
                     $this->logger->error($throwable->getMessage(), ['topic' => $this->topics, 'code' => $throwable->getCode(), 'trace' => $throwable->getTraceAsString(), 'file' => $throwable->getFile(), 'line' => $throwable->getLine()]);
                 }
                 if ($throwable instanceof Exception\ErrorCodeException) {
+                    Coroutine::sleep(0.001);
+                } elseif($throwable instanceof Exception\WaitJoinException) {
                     Coroutine::sleep(0.001);
                 } else {
                     $this->enableListen = false;
@@ -306,7 +304,7 @@ class Process extends BaseProcess
         foreach ($results as $topic) {
             foreach ($topic['partitions'] as $part) {
                 if ($part['errorCode'] !== Protocol::NO_ERROR) {
-                    $this->stateConvert($part['errorCode']);
+                    throw new Exception\WaitJoinException("fetch group failed: errorCode:" . $part['errorCode']);
                     continue;
                 }
 
@@ -326,8 +324,12 @@ class Process extends BaseProcess
     public function heartbeat()
     {
         $result = $this->getHeartbeat()->heartbeat();
-        if (isset($result['errorCode']) && $result['errorCode'] !== Protocol::NO_ERROR) {
-            $this->stateConvert($result['errorCode']);
+        if (isset($result['errorCode'])) {
+            if ($result['errorCode'] == Protocol::NO_ERROR) {
+                Coroutine::sleep(1);
+            } else {
+                $this->stateConvert($result['errorCode']);
+            }
         }
     }
 
@@ -343,7 +345,7 @@ class Process extends BaseProcess
         foreach ($result as $topic) {
             foreach ($topic['partitions'] as $part) {
                 if ($part['errorCode'] !== Protocol::NO_ERROR) {
-                    $this->stateConvert($part['errorCode']);
+                    throw new Exception\WaitJoinException('fetch offset failed, errorcode ' . $part['errorCode']);
                     continue;
                 }
 
@@ -387,10 +389,7 @@ class Process extends BaseProcess
         foreach ($results['topics'] as $topic) {
             foreach ($topic['partitions'] as $part) {
                 if ($part['errorCode'] !== 0) {
-                    $this->stateConvert($part['errorCode'], [
-                        $topic['topicName'],
-                        $part['partition']
-                    ]);
+                    throw new Exception\WaitJoinException('commit failed, wait join group, error_code: '.$part['errorCode'].' message:' . json_encode(['topic' => $topic['topicName'], 'partition' => $part['partition']]));
                     continue;
                 }
                 $offset = $this->getAssignment()->getConsumerOffset($topic['topicName'], $part['partition']);
@@ -437,12 +436,11 @@ class Process extends BaseProcess
         }
         $commitOffset = $this->getAssignment()->getCommitOffsets();
         if (!empty($commitOffset)) {
-
             $results = $this->getOffset()->commit($commitOffset);
             foreach ($results as $topic) {
                 foreach ($topic['partitions'] as $part) {
                     if ($part['errorCode'] !== Protocol::NO_ERROR) {
-                        $this->stateConvert($part['errorCode']);
+                        throw new Exception\WaitJoinException('commit failed, wait join group, error_code:' . $part['errorCode']);
                     }
                 }
             }
@@ -458,7 +456,7 @@ class Process extends BaseProcess
      * @param array|null $context
      * @throws Exception\ErrorCodeException
      */
-    protected function stateConvert(int $errorCode, ?array $context = null)
+    protected function stateConvert(int $errorCode, ?array $context = null, $isJoinHeartBeat = true)
     {
         $recoverCodes = [
             Protocol::UNKNOWN_TOPIC_OR_PARTITION,
@@ -484,9 +482,7 @@ class Process extends BaseProcess
         }
 
         if (in_array($errorCode, $rejoinCodes, true)) {
-            if ($errorCode === Protocol::UNKNOWN_MEMBER_ID) {
-                $this->getAssignment()->setMemberId('');
-            }
+            $this->getAssignment()->setMemberId('');
             $this->getAssignment()->clearOffset();
         }
         if ($errorCode === Protocol::OFFSET_OUT_OF_RANGE) {

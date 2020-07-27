@@ -42,7 +42,6 @@ class Process extends BaseProcess
             'generation_id' => $this->getAssignment()->getGenerationId(),
             'member_id'     => $this->getAssignment()->getMemberId(),
         ];
-
         $requestData = Protocol::encode(Protocol::HEART_BEAT_REQUEST, $params);
         $data = $connect->send($requestData);
         $ret = Protocol::decode(Protocol::HEART_BEAT_REQUEST, substr($data, 8));

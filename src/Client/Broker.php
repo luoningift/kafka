@@ -190,7 +190,6 @@ class Broker
      */
     public function getGroupCoordinatorByGroupId($groupId)
     {
-        echo $groupId . PHP_EOL;
         $consumerOffsetPartition = abs($this->hashCode($groupId) % count($this->topics['__consumer_offsets']));
         $leaderId = $this->topics['__consumer_offsets'][$consumerOffsetPartition];
         return $leaderId;
@@ -280,5 +279,6 @@ class Broker
                 }
             }
         }
+        $this->socketClients = null;
     }
 }

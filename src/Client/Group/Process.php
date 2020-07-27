@@ -71,7 +71,7 @@ class Process extends BaseProcess
      */
     public function leaveGroup(): array
     {
-        $connect = $this->getBroker()->getMetaConnectByBrokerId($this->getBroker()->getGroupBrokerId());
+        $connect = $this->getBroker()->getFetchConnectByBrokerId($this->getBroker()->getGroupBrokerId());
 
         if ($connect === null) {
             throw new ConnectionException();
