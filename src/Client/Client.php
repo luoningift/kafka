@@ -123,26 +123,21 @@ class Client
 
     /**
      * @param null|string $data
-     * @param int $tries
      * @return mixed
      * @throws ConnectionException
      * @throws Exception
      */
-    public function send(?string $data = null, $tries = 4)
+    public function send(?string $data = null)
     {
-        for ($try = 0; $try <= $tries; $try++) {
-            if ($this->isConnected()) {
-                $send = $this->client->send($data);
-                if ($send) {
-                    $receive = $this->client->recv(100);
-                    //空字符串表示服务器主动关闭 false发生错误
-                    if ($receive !== '' && $receive !== false) {
-                        return $receive;
-                    }
+        if ($this->isConnected()) {
+            $send = $this->client->send($data);
+            if ($send) {
+                $receive = $this->client->recv(100);
+                //空字符串表示服务器主动关闭 false发生错误
+                if ($receive !== '' && $receive !== false) {
+                    return $receive;
                 }
             }
-            $this->reconnect();
-            continue;
         }
         $connectStr = "tcp://{$this->host}:{$this->port}";
         throw new ConnectionException("Connect to Kafka server {$connectStr} failed: {$this->client->errMsg}");
@@ -150,19 +145,14 @@ class Client
 
     /**
      * @param null|string $data
-     * @param int $tries
      * @return mixed
      * @throws ConnectionException
      * @throws Exception
      */
-    public function sendWithNoResponse(?string $data = null, $tries = 4)
+    public function sendWithNoResponse(?string $data = null)
     {
-        for ($try = 0; $try <= $tries; $try++) {
-            if ($this->isConnected()) {
-                return $this->client->send($data);
-            }
-            $this->reconnect();
-            continue;
+        if ($this->isConnected()) {
+            return $this->client->send($data);
         }
         $connectStr = "tcp://{$this->host}:{$this->port}";
         throw new ConnectionException("Connect to Kafka server {$connectStr} failed: {$this->client->errMsg}");

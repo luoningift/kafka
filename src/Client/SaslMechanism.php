@@ -9,5 +9,5 @@ namespace HKY\Kafka\Client;
 
 interface SaslMechanism
 {
-    public function autheticate(Client $client): void;
+    public function autheticate(ClientConnection $client): void;
 }

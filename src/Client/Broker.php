@@ -8,11 +8,10 @@
 
 namespace HKY\Kafka\Client;
 
-use HKY\Kafka\Client\Client\ClientInterface;
 use HKY\Kafka\Client\Config\Config;
-use HKY\Kafka\Client\Protocol\JoinGroup;
 use HKY\Kafka\Client\Sasl\Plain;
 use HKY\Kafka\Client\Exception;
+use Roave\BetterReflection\Util\Autoload\ClassPrinter\ClassPrinterInterface;
 
 class Broker
 {
@@ -120,10 +119,10 @@ class Broker
 
     /**
      * @param string $brokerId
-     * @return Client|null
+     * @return ClientConnection|null
      * @throws Exception\Exception
      */
-    public function getMetaConnectByBrokerId(string $brokerId): ?Client
+    public function getMetaConnectByBrokerId(string $brokerId): ?ClientConnection
     {
         return $this->getConnect($brokerId, 'connect');
     }
@@ -131,10 +130,10 @@ class Broker
 
     /**
      * @param string $key
-     * @return Client|null
+     * @return ClientConnection|null
      * @throws Exception\Exception
      */
-    public function getFetchConnectByBrokerId(string $key): ?Client
+    public function getFetchConnectByBrokerId(string $key): ?ClientConnection
     {
         return $this->getConnect($key, 'fetchConnect');
     }
@@ -143,10 +142,10 @@ class Broker
     /**
      * @param string $key
      * @param string $type
-     * @return Client|null
+     * @return ClientConnection|null
      * @throws Exception\Exception
      */
-    public function getConnect(string $key, string $type): ?Client
+    public function getConnect(string $key, string $type): ?ClientConnection
     {
         if (isset($this->brokers[$key])) {
             $hostPort = $this->brokers[$key];
@@ -175,21 +174,21 @@ class Broker
     /**
      * @param string $host
      * @param int $port
-     * @return null|\swoole_client
+     * @return ClientConnection
      * @throws Exception\Config
      * @throws Exception\Exception
      */
-    private function getClient(string $host, int $port): ?Client
+    private function getClient(string $host, int $port): ?ClientConnection
     {
         $saslProvider = $this->judgeConnectionConfig();
-        return new Client($host, $port, $this->config);
+        return new ClientConnection($host, $port, $this->config);
     }
 
     /**
-     * @return Client|null
+     * @return ClientConnection|null
      * @throws Exception\Exception
      */
-    public function getRandConnect(): ?Client
+    public function getRandConnect(): ?ClientConnection
     {
         $nodeIds = array_keys($this->brokers);
         shuffle($nodeIds);
@@ -257,7 +256,7 @@ class Broker
     {
         foreach($this->socketClients as $type => $hostPortsClient) {
             foreach($hostPortsClient as $client) {
-                if ($client instanceof Client) {
+                if ($client instanceof ClientConnection) {
                     try {
                         $client->close();
                     } catch (\Exception $e) {}
