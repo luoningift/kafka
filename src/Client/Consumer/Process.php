@@ -79,20 +79,12 @@ class Process extends BaseProcess
     public function stop()
     {
         $this->enableListen = false;
-        try {
-            $this->getGroup()->leaveGroup();
-        } catch (\Exception $e) {
-        }
         return $this;
     }
 
     public function close()
     {
-        try {
-            $this->getGroup()->leaveGroup();
-        } catch (\Exception $e) {
-        }
-
+        $this->enableListen = false;
         $broker = $this->getBroker();
         $broker->close();
     }
@@ -100,16 +92,10 @@ class Process extends BaseProcess
     private function leaveGroup($consumerMessage)
     {
         if ($consumerMessage->checkAtomic()) {
-            try {
-                $this->getGroup()->leaveGroup();
-            } catch (\Throwable $e) {}
             $this->enableListen = false;
             return true;
         }
         if ($consumerMessage->getSingalExit()) {
-            try {
-                $this->getGroup()->leaveGroup();
-            } catch (\Throwable $e) {}
             $this->enableListen = false;
             return true;
         }
@@ -130,6 +116,9 @@ class Process extends BaseProcess
                     $this->getBroker()->close();
                     while ($this->enableListen) {
                         try {
+                            if ($this->leaveGroup($consumerMessage)) {
+                                continue;
+                            }
                             //加入组
                             if ($this->getAssignment()->isJoinFuture()) {
                                 $this->syncMeta();
@@ -174,6 +163,9 @@ class Process extends BaseProcess
                 }
                 //等待加入组
                 while ($this->getAssignment()->isJoinFuture()) {
+                    if ($this->leaveGroup($consumerMessage)) {
+                        break;
+                    }
                     Coroutine::sleep(0.04);
                 }
                 //休眠
@@ -483,8 +475,7 @@ class Process extends BaseProcess
         }
 
         if (in_array($errorCode, $rejoinCodes, true)) {
-            $this->getAssignment()->setMemberId('');
-            $this->getAssignment()->clearOffset();
+            $this->clear();
         }
         if ($errorCode === Protocol::OFFSET_OUT_OF_RANGE) {
             $resetOffset = $this->getConfig()->getOffsetReset();
@@ -602,5 +593,15 @@ class Process extends BaseProcess
             $this->assignment = new Assignment();
         }
         return $this->assignment;
+    }
+
+    public function clear() {
+        $this->assignment = null;
+        $this->heartbeat = null;
+        $this->offset = null;
+        $this->fetch = null;
+        $this->group = null;
+        $this->syncMeta = null;
+        $this->getBroker()->close();
     }
 }

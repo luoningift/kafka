@@ -69,31 +69,6 @@ class Process extends BaseProcess
      * @throws ConnectionException
      * @throws \HKY\Kafka\Client\Exception\Exception
      */
-    public function leaveGroup(): array
-    {
-        $connect = $this->getBroker()->getFetchConnectByBrokerId($this->getBroker()->getGroupBrokerId());
-
-        if ($connect === null) {
-            throw new ConnectionException();
-        }
-
-        $params = [
-            'group_id'          => $this->getConfig()->getGroupId(),
-            'member_id'         => $this->getAssignment()->getMemberId(),
-        ];
-
-        $requestData = Protocol::encode(Protocol::LEAVE_GROUP_REQUEST, $params);
-        $data = $connect->send($requestData);
-        $ret = Protocol::decode(Protocol::LEAVE_GROUP_REQUEST, substr($data, 8));
-
-        return $ret;
-    }
-
-    /**
-     * @return array
-     * @throws ConnectionException
-     * @throws \HKY\Kafka\Client\Exception\Exception
-     */
     public function syncGroupOnJoinLeader(): array
     {
         $connect = $this->getBroker()->getMetaConnectByBrokerId($this->getBroker()->getGroupBrokerId());
