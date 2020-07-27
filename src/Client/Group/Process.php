@@ -36,28 +36,6 @@ class Process extends BaseProcess
      * @throws ConnectionException
      * @throws \HKY\Kafka\Client\Exception\Exception
      */
-    public function getGroupBrokerId(): array
-    {
-        $broker  = $this->getBroker();
-        $connect = $broker->getRandConnect();
-
-        if ($connect === null) {
-            throw new ConnectionException();
-        }
-
-        $params = ['group_id' => $this->getConfig()->getGroupId()];
-
-        $requestData = Protocol::encode(Protocol::GROUP_COORDINATOR_REQUEST, $params);
-        $data = $connect->send($requestData);
-        $ret = Protocol::decode(Protocol::GROUP_COORDINATOR_REQUEST, substr($data, 8));
-        return $ret;
-    }
-
-    /**
-     * @return array
-     * @throws ConnectionException
-     * @throws \HKY\Kafka\Client\Exception\Exception
-     */
     public function joinGroup(): array
     {
         $connect = $this->getBroker()->getMetaConnectByBrokerId($this->getBroker()->getGroupBrokerId());

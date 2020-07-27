@@ -40,7 +40,6 @@ class Process extends BaseProcess
             if (! $client->isConnected()) {
                 continue;
             }
-
             $params = [];
 
             $requestData = Protocol::encode(Protocol::METADATA_REQUEST, $params);
@@ -59,8 +58,9 @@ class Process extends BaseProcess
                 continue;
             }
             $broker->setData($result['topics'], $result['brokers']);
+            $broker->setGroupBrokerId($broker->getGroupCoordinatorByGroupId($this->config->getGroupId()));
+            break;
         }
-
         return $broker;
     }
 }

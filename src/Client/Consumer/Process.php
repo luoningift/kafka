@@ -135,7 +135,6 @@ class Process extends BaseProcess
                             //加入组
                             if ($this->getAssignment()->isJoinFuture()) {
                                 $this->syncMeta();
-                                $this->getGroupNodeId();
                                 $this->initiateJoinGroup();
                             } else {
                                 $this->heartbeat();
@@ -218,21 +217,6 @@ class Process extends BaseProcess
         $this->setBroker($this->getSyncMeta()->syncMeta());
     }
 
-    /**
-     * @throws Exception\ConnectionException
-     * @throws Exception\ErrorCodeException
-     * @throws Exception\Exception
-     */
-    public function getGroupNodeId()
-    {
-        $results = $this->getGroup()->getGroupBrokerId();
-        if (!isset($results['errorCode'], $results['nodeId'])
-            || $results['errorCode'] !== Protocol::NO_ERROR
-        ) {
-            $this->stateConvert($results['errorCode']);
-        }
-        $this->getBroker()->setGroupBrokerId($results['nodeId']);
-    }
 
     /**
      * @throws Exception\ConnectionException
