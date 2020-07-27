@@ -128,7 +128,7 @@ class Client
      * @throws ConnectionException
      * @throws Exception
      */
-    public function send(?string $data = null, $tries = 2)
+    public function send(?string $data = null, $tries = 4)
     {
         for ($try = 0; $try <= $tries; $try++) {
             if ($this->isConnected()) {
@@ -155,7 +155,7 @@ class Client
      * @throws ConnectionException
      * @throws Exception
      */
-    public function sendWithNoResponse(?string $data = null, $tries = 2)
+    public function sendWithNoResponse(?string $data = null, $tries = 4)
     {
         for ($try = 0; $try <= $tries; $try++) {
             if ($this->isConnected()) {
