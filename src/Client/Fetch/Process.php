@@ -14,6 +14,7 @@ use HKY\Kafka\Client\Consumer\Assignment;
 use HKY\Kafka\Client\Exception;
 use HKY\Kafka\Client\Exception\ConnectionException;
 use HKY\Kafka\Client\Protocol;
+use Hyperf\Utils\ApplicationContext;
 
 class Process extends BaseProcess
 {
@@ -34,21 +35,16 @@ class Process extends BaseProcess
 
     /**
      * @param array $offsets
-     * @param int $maxPollRecord
      * @return array
      * @throws Exception\ConnectionException
      * @throws Exception\Exception
      */
-    public function fetch(array $offsets = [], $maxPollRecord = 1): array
+    public function fetch(array $offsets = []): array
     {
         if (empty($offsets)) {
             return [];
         }
-        $shuffleTopics = $this->getAssignment()->getTopics();
-        uksort($shuffleTopics, function ($a, $b) {return mt_rand(-1000, 1000);});
-        $res = [];
-        $hasPollRecord = 0;
-        foreach ($shuffleTopics as $nodeId => $topics) {
+        foreach ($this->getAssignment()->getTopics() as $nodeId => $topics) {
             $data = [];
             foreach ($topics as $topicName => $partitions) {
                 $item = [
@@ -66,43 +62,43 @@ class Process extends BaseProcess
                 }
                 $data[] = $item;
             }
-            $params = array(
+            $params = [
                 'max_wait_time'     => $this->getConfig()->getMaxWaitTime(),
                 'min_bytes'         => $this->getConfig()->getMinBytes(),
                 'replica_id'        => -1,
                 'data'              => $data,
-            );
+            ];
+
             $connect = $this->getBroker()->getFetchConnectByBrokerId($nodeId);
             if ($connect === null) {
                 throw new ConnectionException();
             }
             $requestData = Protocol::encode(Protocol::FETCH_REQUEST, $params);
             $data = $connect->send($requestData);
-            $valueRet = Protocol::decode(Protocol::FETCH_REQUEST, substr($data, 8));
+            $ret[] = Protocol::decode(Protocol::FETCH_REQUEST, substr($data, 8));
+        }
+        if (!empty($ret)) {
             $allTopicName = [];
             $throttleTime = [];
-            foreach ($valueRet['topics'] as $keyTopics => $valueTopics) {
-                $allTopicName['topics'][$valueTopics['topicName']]['topicName'] = $valueTopics['topicName'];
-                foreach ($valueTopics['partitions'] as $keyPartitions => $valuePartitions) {
-                    if (!isset($throttleTime[$valueTopics['topicName']])) {
-                        $throttleTime[$valueTopics['topicName']] = $valueRet['throttleTime'];
+            foreach ($ret as $keyRet => $valueRet) {
+                foreach ($valueRet['topics'] as $keyTopics => $valueTopics) {
+                    $allTopicName['topics'][$valueTopics['topicName']]['topicName'] = $valueTopics['topicName'];
+                    foreach ($valueTopics['partitions'] as $keyPartitions => $valuePartitions) {
+                        if (!isset($throttleTime[$valueTopics['topicName']])) {
+                            $throttleTime[$valueTopics['topicName']] = $valueRet['throttleTime'];
+                        }
+                        $allTopicName['topics'][$valueTopics['topicName']]['partitions'][] = $valuePartitions;
                     }
-                    $allTopicName['topics'][$valueTopics['topicName']]['partitions'][] = $valuePartitions;
                 }
             }
+            $res = [];
             foreach ($allTopicName['topics'] as $keyRes => $valueRes) {
                 if (!isset($res['throttleTime'])) {
                     $res['throttleTime'] = $throttleTime[$keyRes];
                 }
                 $res['topics'][] = $valueRes;
-                foreach($valueRes['partitions'] as $part) {
-                    $hasPollRecord += count($part['messages']??[]);
-                    if ($hasPollRecord >= $maxPollRecord) {
-                        return $res;
-                    }
-                }
             }
         }
-        return $res;
+        return $res ?? [];
     }
 }

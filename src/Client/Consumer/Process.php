@@ -122,6 +122,7 @@ class Process extends BaseProcess
                             //加入组
                             if ($this->getAssignment()->isJoinFuture()) {
                                 $this->syncMeta();
+                                $this->getGroupNodeId();
                                 $this->initiateJoinGroup();
                             } else {
                                 $this->heartbeat();
@@ -187,7 +188,7 @@ class Process extends BaseProcess
                     Coroutine::sleep(0.001);
                 } elseif ($throwable instanceof Exception\WaitJoinException) {
                     Coroutine::sleep(0.001);
-                } elseif($throwable instanceof Exception\ConnectionException) {
+                } elseif ($throwable instanceof Exception\ConnectionException) {
                     Coroutine::sleep(20);
                 } else {
                     $this->enableListen = false;
@@ -208,6 +209,21 @@ class Process extends BaseProcess
         $this->setBroker($this->getSyncMeta()->syncMeta());
     }
 
+    /**
+     * @throws Exception\ConnectionException
+     * @throws Exception\ErrorCodeException
+     * @throws Exception\Exception
+     */
+    public function getGroupNodeId()
+    {
+        $results = $this->getGroup()->getGroupBrokerId();
+        if (!isset($results['errorCode'], $results['nodeId'])
+            || $results['errorCode'] !== Protocol::NO_ERROR
+        ) {
+            $this->stateConvert($results['errorCode']);
+        }
+        $this->getBroker()->setGroupBrokerId($results['nodeId']);
+    }
 
     /**
      * @throws Exception\ConnectionException
@@ -232,7 +248,11 @@ class Process extends BaseProcess
     {
         $result = $this->getGroup()->joinGroup();
         if (isset($result['errorCode']) && $result['errorCode'] !== Protocol::NO_ERROR) {
-            $this->stateConvert($result['errorCode']);
+            $this->getAssignment()->setMemberId($result["memberId"]);
+            $result = $this->getGroup()->joinGroup();
+            if (isset($result['errorCode']) && $result['errorCode'] !== Protocol::NO_ERROR) {
+                $this->stateConvert($result['errorCode']);
+            }
         }
         $this->getAssignment()->setMemberId($result['memberId']);
         $this->getAssignment()->setGenerationId($result['generationId']);
@@ -255,7 +275,6 @@ class Process extends BaseProcess
         } else {
             $result = $this->getGroup()->syncGroupOnJoinFollower();
         }
-
         if (isset($result['errorCode']) && $result['errorCode'] !== Protocol::NO_ERROR) {
             $this->stateConvert($result['errorCode']);
         }
@@ -370,7 +389,7 @@ class Process extends BaseProcess
     public function fetchMsg()
     {
         $isFetchMessage = false;
-        $results = $this->getFetch()->fetch($this->getAssignment()->getConsumerOffsets(), $this->maxPollRecord);
+        $results = $this->getFetch()->fetch($this->getAssignment()->getConsumerOffsets());
         if (!isset($results['topics'])) {
             return $isFetchMessage;
         }
@@ -380,6 +399,7 @@ class Process extends BaseProcess
         foreach ($results['topics'] as $topic) {
             foreach ($topic['partitions'] as $part) {
                 if ($part['errorCode'] !== 0) {
+                    $this->getAssignment()->clearOffset();
                     throw new Exception\WaitJoinException('commit failed, wait join group, error_code: ' . $part['errorCode'] . ' message:' . json_encode(['topic' => $topic['topicName'], 'partition' => $part['partition']]));
                 }
                 $offset = $this->getAssignment()->getConsumerOffset($topic['topicName'], $part['partition']);
@@ -430,6 +450,7 @@ class Process extends BaseProcess
             foreach ($results as $topic) {
                 foreach ($topic['partitions'] as $part) {
                     if ($part['errorCode'] !== Protocol::NO_ERROR) {
+                        $this->getAssignment()->clearOffset();
                         throw new Exception\WaitJoinException('commit failed, wait join group, error_code:' . $part['errorCode']);
                     }
                 }
@@ -472,7 +493,10 @@ class Process extends BaseProcess
         }
 
         if (in_array($errorCode, $rejoinCodes, true)) {
-            $this->clear();
+            if ($errorCode === Protocol::UNKNOWN_MEMBER_ID) {
+                $this->getAssignment()->setMemberId('');
+            }
+            $this->getAssignment()->clearOffset();
         }
         if ($errorCode === Protocol::OFFSET_OUT_OF_RANGE) {
             $resetOffset = $this->getConfig()->getOffsetReset();
@@ -590,16 +614,5 @@ class Process extends BaseProcess
             $this->assignment = new Assignment();
         }
         return $this->assignment;
-    }
-
-    public function clear()
-    {
-        $this->assignment = null;
-        $this->heartbeat = null;
-        $this->offset = null;
-        $this->fetch = null;
-        $this->group = null;
-        $this->syncMeta = null;
-        $this->getBroker()->close();
     }
 }

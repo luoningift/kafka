@@ -99,7 +99,7 @@ class ConsumerManager
                     $config = new ConsumerConfig();
                     $config->setRefreshIntervalMs(1000);
                     $config->setMetadataBrokerList($kafkaConfig['broker_list'] ?? '127.0.0.1:9092,127.0.0.1:9093');
-                    $config->setBrokerVersion($kafkaConfig['version'] ?? '0.9.0');
+                    $config->setBrokerVersion('0.10.1.0');
                     $config->setGroupId($consumerMessage->getGroup());
                     $config->setTopics([$consumerMessage->getTopic()]);
                     $config->setMaxBytes($consumerMessage->getMaxBytes());
