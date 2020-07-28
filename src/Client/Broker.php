@@ -155,6 +155,9 @@ class Broker
         if (isset($this->socketClients[$type][$hostPort])) {
             return $this->socketClients[$type][$hostPort];
         }
+        if (strpos($hostPort, ':') === false) {
+            throw new Exception\ConnectionException($hostPort . ' is not connect failed');
+        }
         [$host, $port] = explode(':', $hostPort);
         if (!$host || !$port) {
             throw new Exception\ConnectionException('host or port is not correct');
@@ -279,6 +282,6 @@ class Broker
                 }
             }
         }
-        $this->socketClients = null;
+        $this->socketClients = [];
     }
 }

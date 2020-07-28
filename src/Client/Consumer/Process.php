@@ -69,7 +69,7 @@ class Process extends BaseProcess
     private $maxPollRecord = 1;
 
     private $logger;
-    
+
     public function __construct(ConsumerConfig $config)
     {
         $this->logger = ApplicationContext::getContainer()->get(\Hyperf\Logger\LoggerFactory::class)->get('kafka');
@@ -109,7 +109,7 @@ class Process extends BaseProcess
      */
     public function joinHeartbeat($consumerMessage)
     {
-        go(function() use ($consumerMessage) {
+        go(function () use ($consumerMessage) {
             $concurrent = new Concurrent(1);
             while ($this->enableListen) {
                 $concurrent->create(function () use ($consumerMessage) {
@@ -131,13 +131,15 @@ class Process extends BaseProcess
                             $this->logger->error('joinAndHeartbeat:' . $throwable->getMessage(), ['topic' => $this->topics, 'code' => $throwable->getCode(), 'trace' => $throwable->getTraceAsString(), 'file' => $throwable->getFile(), 'line' => $throwable->getLine()]);
                             if ($throwable instanceof Exception\ErrorCodeException) {
                                 Coroutine::sleep(0.001);
+                            } elseif ($throwable instanceof Exception\ConnectionException) {
+                                Coroutine::sleep(20);
                             } else {
                                 throw $throwable;
                             }
                         }
                     }
                 });
-            }    
+            }
         });
     }
 
@@ -180,15 +182,13 @@ class Process extends BaseProcess
                 Coroutine::sleep($isFetchMessage ? 0.001 : $defaultSleepTime);
             } catch (\Throwable $throwable) {
                 $this->getAssignment()->setJoinFuture(true);
-                if ($throwable instanceof Exception\ConnectionException) {
-                    Coroutine::sleep(10);
-                } else {
-                    $this->logger->error($throwable->getMessage(), ['topic' => $this->topics, 'code' => $throwable->getCode(), 'trace' => $throwable->getTraceAsString(), 'file' => $throwable->getFile(), 'line' => $throwable->getLine()]);
-                }
+                $this->logger->error($throwable->getMessage(), ['topic' => $this->topics, 'code' => $throwable->getCode(), 'trace' => $throwable->getTraceAsString(), 'file' => $throwable->getFile(), 'line' => $throwable->getLine()]);
                 if ($throwable instanceof Exception\ErrorCodeException) {
                     Coroutine::sleep(0.001);
-                } elseif($throwable instanceof Exception\WaitJoinException) {
+                } elseif ($throwable instanceof Exception\WaitJoinException) {
                     Coroutine::sleep(0.001);
+                } elseif($throwable instanceof Exception\ConnectionException) {
+                    Coroutine::sleep(20);
                 } else {
                     $this->enableListen = false;
                     throw $throwable;
@@ -298,7 +298,6 @@ class Process extends BaseProcess
             foreach ($topic['partitions'] as $part) {
                 if ($part['errorCode'] !== Protocol::NO_ERROR) {
                     throw new Exception\WaitJoinException("fetch group failed: errorCode:" . $part['errorCode']);
-                    continue;
                 }
 
                 $offsets[$topic['topicName']][$part['partition']] = end($part['offsets']);
@@ -339,7 +338,6 @@ class Process extends BaseProcess
             foreach ($topic['partitions'] as $part) {
                 if ($part['errorCode'] !== Protocol::NO_ERROR) {
                     throw new Exception\WaitJoinException('fetch offset failed, errorcode ' . $part['errorCode']);
-                    continue;
                 }
 
                 $offsets[$topic['topicName']][$part['partition']] = $part['offset'];
@@ -382,8 +380,7 @@ class Process extends BaseProcess
         foreach ($results['topics'] as $topic) {
             foreach ($topic['partitions'] as $part) {
                 if ($part['errorCode'] !== 0) {
-                    throw new Exception\WaitJoinException('commit failed, wait join group, error_code: '.$part['errorCode'].' message:' . json_encode(['topic' => $topic['topicName'], 'partition' => $part['partition']]));
-                    continue;
+                    throw new Exception\WaitJoinException('commit failed, wait join group, error_code: ' . $part['errorCode'] . ' message:' . json_encode(['topic' => $topic['topicName'], 'partition' => $part['partition']]));
                 }
                 $offset = $this->getAssignment()->getConsumerOffset($topic['topicName'], $part['partition']);
                 if ($offset === null) {
@@ -500,7 +497,7 @@ class Process extends BaseProcess
             foreach ($value as $partition => $messages) {
                 foreach ($messages as $message) {
                     $parallel = new Parallel(1);
-                    $parallel->add(function() use ($topic, $partition, $message){
+                    $parallel->add(function () use ($topic, $partition, $message) {
                         try {
                             call_user_func_array($this->consumer, [$this, $topic, $partition, $message]);
                         } catch (\Throwable $throwable) {
@@ -595,7 +592,8 @@ class Process extends BaseProcess
         return $this->assignment;
     }
 
-    public function clear() {
+    public function clear()
+    {
         $this->assignment = null;
         $this->heartbeat = null;
         $this->offset = null;
