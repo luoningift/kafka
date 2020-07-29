@@ -150,6 +150,7 @@ class StudyProgressNormalProcess extends ConsumerMessage
 ```
 ### 版本改动:
 ```$xslt
+v1.0.7   修改版本号到0.10.1.0
 v1.0.6   randConnect bug modify
 v1.0.5   bug fixed,删除无用代码
 v1.0.4   解决消费时间过长 提交偏移量失败的问题
