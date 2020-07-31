@@ -131,7 +131,11 @@ class Process extends BaseProcess
                             $this->getAssignment()->setJoinFuture(true);
                             $this->logger->error('joinAndHeartbeat:' . $throwable->getMessage(), ['topic' => $this->topics, 'code' => $throwable->getCode(), 'trace' => $throwable->getTraceAsString(), 'file' => $throwable->getFile(), 'line' => $throwable->getLine()]);
                             if ($throwable instanceof Exception\ErrorCodeException) {
-                                Coroutine::sleep(0.001);
+                                if ($throwable->getCode() == Protocol::GROUP_COORDINATOR_NOT_AVAILABLE) {
+                                    Coroutine::sleep(20);
+                                } else {
+                                    Coroutine::sleep(0.001);
+                                }
                             } elseif ($throwable instanceof Exception\ConnectionException) {
                                 Coroutine::sleep(20);
                             } else {
@@ -185,7 +189,11 @@ class Process extends BaseProcess
                 $this->getAssignment()->setJoinFuture(true);
                 $this->logger->error($throwable->getMessage(), ['topic' => $this->topics, 'code' => $throwable->getCode(), 'trace' => $throwable->getTraceAsString(), 'file' => $throwable->getFile(), 'line' => $throwable->getLine()]);
                 if ($throwable instanceof Exception\ErrorCodeException) {
-                    Coroutine::sleep(0.001);
+                    if ($throwable->getCode() == Protocol::GROUP_COORDINATOR_NOT_AVAILABLE) {
+                        Coroutine::sleep(20);
+                    } else {
+                        Coroutine::sleep(0.001);
+                    }
                 } elseif ($throwable instanceof Exception\WaitJoinException) {
                     Coroutine::sleep(0.001);
                 } elseif ($throwable instanceof Exception\ConnectionException) {
