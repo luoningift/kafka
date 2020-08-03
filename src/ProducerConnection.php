@@ -51,7 +51,6 @@ class ProducerConnection extends BaseConnection implements ConnectionInterface
     {
         parent::__construct($container, $pool);
         $this->config = array_replace($this->config, $config);
-        var_dump($this->config);
     }
 
     public function __call($name, $arguments)
