@@ -22,27 +22,32 @@ class Consumer extends AbstractAnnotation
     /**
      * @var string
      */
-    public $poolName = '';
+    public $configName;
 
     /**
      * @var string
      */
-    public $topic = '';
+    public $poolName;
+
+    /**
+     * @var string
+     */
+    public $topic;
 
     /**
      * @var int
      */
-    public $consumerNums = 3;
+    public $consumerNums;
 
     /**
      * @var string
      */
-    public $group = 'kafka_group';
+    public $group;
 
     /**
      * @var string
      */
-    public $name = 'KafkaConsumer';
+    public $name;
 
     /**
      * @var null|bool
@@ -52,7 +57,7 @@ class Consumer extends AbstractAnnotation
     /**
      * @var int
      */
-    public $maxConsumption = -1;
+    public $maxConsumption;
 
     /**
      * @var int

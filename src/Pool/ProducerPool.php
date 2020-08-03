@@ -35,9 +35,9 @@ class ProducerPool extends Pool
     {
         $this->name = $name;
         $config = $container->get(ConfigInterface::class);
-        $key = sprintf('hky_kafka.producer.%s', $this->name);
+        $key = sprintf('hky_kafka.pool.%s', $this->name);
         if (! $config->has($key)) {
-            throw new \InvalidArgumentException(sprintf('config[producer.%s] is not exist!', $key));
+            throw new \InvalidArgumentException(sprintf('config[hky_kafka.%s] is not exist!', $key));
         }
 
         $this->config = $config->get($key);

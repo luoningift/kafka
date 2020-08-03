@@ -16,9 +16,12 @@ use HKY\Kafka\Annotation\Consumer as ConsumerAnnotation;
 use HKY\Kafka\Client\Config\ConsumerConfig;
 use HKY\Kafka\Message\ConsumerMessageInterface;
 use Hyperf\Contract\ConfigInterface;
+use Hyperf\Contract\StdoutLoggerInterface;
 use Hyperf\Di\Annotation\AnnotationCollector;
 use Hyperf\Process\AbstractProcess;
 use Hyperf\Process\ProcessManager;
+use Hyperf\Utils\Coroutine;
+use Hyperf\Utils\Coroutine\Concurrent;
 use Psr\Container\ContainerInterface;
 use Swoole\Process;
 
@@ -29,6 +32,24 @@ class ConsumerManager
      */
     private $container;
 
+    private $propertyMap = [
+        'pool_name' => 'poolName',
+        'enable' => 'enable',
+        'max_byte' => 'maxByte',
+        'topic' => 'topic',
+        'consumer_nums' => 'consumerNums',
+        'name' => 'name',
+        'group' => 'group',
+        'max_consumption' => 'maxConsumption',
+    ];
+
+    private $propertyDefault = [
+        'enable' => true,
+        'maxByte' => 65535,
+        'consumerNums' => 1,
+        'maxConsumption' => -1,
+    ];
+
     public function __construct(ContainerInterface $container)
     {
         $this->container = $container;
@@ -37,6 +58,50 @@ class ConsumerManager
     public function run()
     {
         $classes = AnnotationCollector::getClassByAnnotation(ConsumerAnnotation::class);
+
+        $connectConfig = $this->container->get(ConfigInterface::class)->get('hky_kafka.pool');
+        $consumerConfig = $this->container->get(ConfigInterface::class)->get('hky_kafka.consumer');
+        if ($classes && ($consumerConfig === null || $connectConfig === null)) {
+            $this->container->get(StdoutLoggerInterface::class)->error('未找到hky_kafka.consumer或者hky_kafka.pool配置文件');
+            exit;
+        }
+
+        /**
+         * @var string
+         * @var ConsumerAnnotation $annotation
+         */
+        foreach($classes as $class => $annotation) {
+
+            if ($annotation->configName === null) {
+                $this->container->get(StdoutLoggerInterface::class)->error('kafka消费端' . $class . '未配置configName');
+                exit;
+            }
+            if (!isset($consumerConfig[$annotation->configName])) {
+                $this->container->get(StdoutLoggerInterface::class)->error('在hky_kafka.consumer配置文件中未找到 ' . $annotation->configName . ' 配置项');
+                exit;
+            }
+            if (!isset($consumerConfig[$annotation->configName]['pool_name'])) {
+                $this->container->get(StdoutLoggerInterface::class)->error('在hky_kafka.consumer配置文件中未找到 pool_name 配置项');
+            }
+            $connectPool = $consumerConfig[$annotation->configName]['pool_name'];
+            if (!isset($connectConfig[$connectPool])) {
+                $this->container->get(StdoutLoggerInterface::class)->error('在hky_kafka.pool配置文件中未找到 ' . $connectPool . ' 配置项');
+                exit;
+            }
+            $oneConsumerConfig = $consumerConfig[$annotation->configName];
+            foreach($this->propertyMap as $configKey => $annotationKey) {
+                if ($annotation->$annotationKey === null && isset($oneConsumerConfig[$configKey])) {
+                    $annotation->$annotationKey = $oneConsumerConfig[$configKey];
+                }
+                if ($annotation->$annotationKey === null && isset($this->propertyDefault[$annotationKey])) {
+                    $annotation->$annotationKey = $this->propertyDefault[$annotationKey];
+                }
+                if ($annotation->$annotationKey === null) {
+                    $this->container->get(StdoutLoggerInterface::class)->error('配置项' . $annotationKey . '不能为空, 请在配置文件中配置 ' . $configKey . ' 或者在注解中配置 ' . $annotationKey);
+                    exit;
+                }
+            }
+        }
         /**
          * @var string
          * @var ConsumerAnnotation $annotation
@@ -95,7 +160,7 @@ class ConsumerManager
                 $kafka = null;
                 $config = null;
                 try {
-                    $kafkaConfig = $this->container->get(ConfigInterface::class)->get('hky_kafka.consumer.' . $consumerMessage->getPoolName());
+                    $kafkaConfig = $this->container->get(ConfigInterface::class)->get('hky_kafka.pool.' . $consumerMessage->getPoolName());
                     $config = new ConsumerConfig();
                     $config->setRefreshIntervalMs(1000);
                     $config->setMetadataBrokerList($kafkaConfig['broker_list'] ?? '127.0.0.1:9092,127.0.0.1:9093');

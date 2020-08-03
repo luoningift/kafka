@@ -11,6 +11,7 @@ declare(strict_types=1);
  */
 namespace HKY\Kafka\Pool;
 
+use Hyperf\Contract\ConfigInterface;
 use Hyperf\Di\Container;
 use Psr\Container\ContainerInterface;
 
@@ -36,11 +37,17 @@ class ProducerPoolFactory
         if (isset($this->pools[$name])) {
             return $this->pools[$name];
         }
-
+        $producerConf = $this->container->get(ConfigInterface::class)->get('hky_kafka.producer');
+        $currentPoolName = $producerConf[$name]['pool_name'];
         if ($this->container instanceof Container) {
-            $pool = $this->container->make(ProducerPool::class, ['name' => $name]);
+            $pool = $this->container->make(ProducerPool::class, ['name' => $currentPoolName]);
         } else {
-            $pool = new ProducerPool($this->container, $name);
+            $pool = new ProducerPool($this->container, $currentPoolName);
+        }
+        foreach($producerConf as $tPoolName => $tProducerConf) {
+            if ($tProducerConf['pool_name'] == $currentPoolName && $tPoolName != $name) {
+                $this->pools[$tPoolName] = $pool;
+            }
         }
         return $this->pools[$name] = $pool;
     }
