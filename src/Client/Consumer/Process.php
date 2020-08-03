@@ -438,9 +438,6 @@ class Process extends BaseProcess
                 }
             }
         }
-        if ($this->messages) {
-            print_r($this->messages);
-        }
         return $isFetchMessage;
     }
 
